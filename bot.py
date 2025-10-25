@@ -364,7 +364,7 @@ async def get_products_by_sort(session, product_type):
         search_queries = [
             "iPhone 16", "iPhone 16 128gb", "iPhone 16 sim + esim", "iPhone 16 dual sim",
             "iPhone 16 две сим", "iPhone 16 черный", "iPhone 16 белый", "iPhone 16 синий",
-            "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", 
+            "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", "Смартфон iPhone 16 128 Гб",
             "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
         ]
     

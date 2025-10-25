@@ -77,7 +77,7 @@ def get_products_by_sort(query):
     return products
 
 # Разные варианты поискового запроса
-search_queries = [
+search_queries1 = [
      "playstation 5 slim",
       "playstation 5 slim с дисководом", 
       "playstation 5",
@@ -117,9 +117,17 @@ search_queries1 = [
     "Смартфон iPhone 15"
 ]
 
+search_queries = [
+            "iPhone 16", "iPhone 16 128gb", "iPhone 16 sim + esim", "iPhone 16 dual sim",
+            "iPhone 16 две сим", "iPhone 16 черный", "iPhone 16 белый", "iPhone 16 синий",
+            "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", "Смартфон iPhone 16 128 Гб",
+            "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
+        ]
+    
+
 # Список для исключения ненужных iPhone (в нижнем регистре)
 iphone_exclude_keywords = [
-    "16", "14", "13", "11", "iphone 16", "iphone 14", "iphone 13", "iphone 12", "iphone 11", "iphone xr", "iphone xs", "iphone x", "iphone 8", "iphone 7", "iphone 6",
+    "15", "14", "13", "11", "iphone 15", "iphone 14", "iphone 13", "iphone 12", "iphone 11", "iphone xr", "iphone xs", "iphone x", "iphone 8", "iphone 7", "iphone 6",
     "16e", "16 e", "16 plus", "16 plus",
     "восстановленный", "ремоторизованный", "refurbished", "б/у", "used",
     "восстановлен", "отремонтированный", "восстанавливать"
@@ -165,7 +173,7 @@ def should_exclude_product(name, product_type):
         bool: True если товар нужно исключить, False если оставить
     """
     
-    if product_type == "ps5":
+    if product_type == "iphone":
         exclude_keywords = ps5_exclude_keywords
     else:  # iphone
         exclude_keywords = iphone_exclude_keywords
@@ -194,7 +202,7 @@ HEADERS = {
 }
 
 links = []
-max_price = 45000
+max_price = 52000
 for i in range(len(all_products)):
   name = str(all_products[i]["name"])
   product_price = int(all_products[i]['sizes'][0]['price']['product'])/100 * 0.93 
