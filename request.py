@@ -49,85 +49,7 @@
 # for i in range(len(links)):
 #   print(links[i])
 
-
 import requests
-
-class Database:
-    def __init__(self):
-        self.conn = sqlite3.connect('price_monitor.db', check_same_thread=False)
-        self.create_tables()
-    
-    def create_tables(self):
-        cursor = self.conn.cursor()
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_settings (
-                user_id INTEGER PRIMARY KEY,
-                ps5_price INTEGER DEFAULT 0,
-                iphone_price INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS sent_products (
-                user_id INTEGER,
-                product_id INTEGER,
-                product_type TEXT,
-                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, product_id)
-            )
-        ''')
-        
-        self.conn.commit()
-    
-    def get_user_settings(self, user_id):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT ps5_price, iphone_price FROM user_settings WHERE user_id = ?', (user_id,))
-        result = cursor.fetchone()
-        return result if result else (0, 0)
-    
-    def set_user_price(self, user_id, product_type, price):
-        cursor = self.conn.cursor()
-        
-        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
-        if cursor.fetchone():
-            if product_type == 'ps5':
-                cursor.execute('UPDATE user_settings SET ps5_price = ? WHERE user_id = ?', (price, user_id))
-            else:
-                cursor.execute('UPDATE user_settings SET iphone_price = ? WHERE user_id = ?', (price, user_id))
-        else:
-            if product_type == 'ps5':
-                cursor.execute('INSERT INTO user_settings (user_id, ps5_price) VALUES (?, ?)', (user_id, price))
-            else:
-                cursor.execute('INSERT INTO user_settings (user_id, iphone_price) VALUES (?, ?)', (user_id, price))
-        
-        self.conn.commit()
-    
-    def is_product_sent_recently(self, user_id, product_id, hours=6):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT 1 FROM sent_products 
-            WHERE user_id = ? AND product_id = ? AND sent_at > datetime('now', ?)
-        ''', (user_id, product_id, f'-{hours} hours'))
-        return cursor.fetchone() is not None
-    
-    def mark_product_sent(self, user_id, product_id, product_type):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            INSERT OR REPLACE INTO sent_products (user_id, product_id, product_type, sent_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (user_id, product_id, product_type))
-        self.conn.commit()
-    
-    def get_all_users(self):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT user_id, ps5_price, iphone_price FROM user_settings')
-        return cursor.fetchall()
-
-# Инициализация базы данных
-db = Database()
-
 
 def get_products_by_sort(query):
     """Получаем товары с разными сортировками"""
@@ -155,14 +77,18 @@ def get_products_by_sort(query):
     return products
 
 # Разные варианты поискового запроса
-search_queries1 = [
-    "playstation 5 slim",
-    "playstation 5 slim с дисководом",
-    "playstation 5",
-    "игровая консоль playstation 5",
+search_queries = [
+     "playstation 5 slim",
+      "playstation 5 slim с дисководом", 
+      "playstation 5",
+      "ps5",
+      "ps 5",
+      "ps5 blue-ray",
+      "ps 5 blue ray",
+      "игровая консоль playstation 5",
 ]
 
-search_queries = [
+search_queries1 = [
     # Основные запросы
     "iPhone 15",
     "iPhone 15 128gb",
@@ -272,7 +198,7 @@ max_price = 45000
 for i in range(len(all_products)):
   name = str(all_products[i]["name"])
   product_price = int(all_products[i]['sizes'][0]['price']['product'])/100 * 0.93 
-  if should_exclude_product(name.lower(), "iphone"):
+  if should_exclude_product(name.lower(), "ps5"):
     continue
   
   if 524901651 == all_products[i]["id"]:

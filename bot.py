@@ -323,6 +323,7 @@ async def get_products_by_sort(session, product_type):
             "playstation 5 slim",
             "playstation 5 slim с дисководом", 
             "playstation 5",
+            "ps5 blue-ray",
             "игровая консоль playstation 5",
         ]
     else:
