@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 
 # 7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U
-BOT_TOKEN = ""
+BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
 
 HEADERS = {
     "authority": "u-card.wb.ru",
@@ -75,16 +75,19 @@ class Database:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS price_history (
                 id INTEGER PRIMARY KEY,
+                user_id INTEGER,
                 product_id INTEGER,
                 product_type TEXT,
                 price INTEGER,
-                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                discount_percent INTEGER DEFAULT 7,
+                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
             )
         ''')
         
         cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_price_history_product_id 
-            ON price_history (product_id, checked_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_price_history_user_product 
+            ON price_history (user_id, product_id, checked_at DESC)
         ''')
         
         self.conn.commit()
@@ -128,9 +131,17 @@ class Database:
         self.conn.commit()
     
     def set_user_discount(self, user_id, discount_percent):
-        """Установка процента скидки для пользователя"""
+        """Установка процента скидки для пользователя с обновлением истории цен"""
         cursor = self.conn.cursor()
         
+        # Получаем старую скидку
+        old_discount = 7  # значение по умолчанию
+        cursor.execute('SELECT discount_percent FROM user_settings WHERE user_id = ?', (user_id,))
+        result = cursor.fetchone()
+        if result:
+            old_discount = result[0]
+        
+        # Обновляем настройки пользователя
         cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
         if cursor.fetchone():
             cursor.execute('UPDATE user_settings SET discount_percent = ? WHERE user_id = ?', 
@@ -140,45 +151,15 @@ class Database:
                           (user_id, discount_percent))
         
         self.conn.commit()
-    
-    def set_user_price(self, user_id, product_type, price):
-        cursor = self.conn.cursor()
         
-        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
-        if cursor.fetchone():
-            if product_type == 'ps5':
-                cursor.execute('UPDATE user_settings SET ps5_price = ? WHERE user_id = ?', (price, user_id))
-            else:
-                cursor.execute('UPDATE user_settings SET iphone_price = ? WHERE user_id = ?', (price, user_id))
-        else:
-            if product_type == 'ps5':
-                cursor.execute('INSERT INTO user_settings (user_id, ps5_price, discount_percent) VALUES (?, ?, ?)', 
-                              (user_id, price, 7))
-            else:
-                cursor.execute('INSERT INTO user_settings (user_id, iphone_price, discount_percent) VALUES (?, ?, ?)', 
-                              (user_id, price, 7))
-        
-        self.conn.commit()
-    
-    def set_user_discount(self, user_id, discount_percent):
-        """Установка процента скидки для пользователя"""
-        cursor = self.conn.cursor()
-        
-        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
-        if cursor.fetchone():
-            cursor.execute('UPDATE user_settings SET discount_percent = ? WHERE user_id = ?', 
-                          (discount_percent, user_id))
-        else:
-            cursor.execute('INSERT INTO user_settings (user_id, discount_percent) VALUES (?, ?)', 
-                          (user_id, discount_percent))
-        
-        self.conn.commit()
+        # Если скидка изменилась, обновляем историю цен
+        if old_discount != discount_percent:
+            self.update_discount_in_price_history(user_id, discount_percent)
     
     def get_all_users(self):
-      cursor = self.conn.cursor()
-      cursor.execute('SELECT user_id, ps5_price, iphone_price, discount_percent, price_threshold FROM user_settings')
-      return cursor.fetchall()
-    
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT user_id, ps5_price, iphone_price, discount_percent, price_threshold FROM user_settings')
+        return cursor.fetchall()
     
     def set_waiting_for_price(self, user_id, waiting_for_price, product_type=None):
         cursor = self.conn.cursor()
@@ -236,47 +217,100 @@ class Database:
         self.conn.commit()
         return sent_deleted + price_deleted + temp_deleted
     
-    def get_previous_price(self, product_id):
-        """Получаем предыдущую цену товара (последнюю записанную)"""
+    def get_previous_price(self, user_id, product_id):
+        """Получаем предыдущую цену товара для конкретного пользователя"""
         cursor = self.conn.cursor()
         cursor.execute('''
             SELECT price FROM price_history 
-            WHERE product_id = ? 
+            WHERE user_id = ? AND product_id = ? 
             ORDER BY checked_at DESC 
             LIMIT 1
-        ''', (product_id,))
+        ''', (user_id, product_id))
         result = cursor.fetchone()
         return result[0] if result else None
     
-    def save_price_if_changed(self, product_id, product_type, current_price):
+    def save_price_if_changed(self, user_id, product_id, product_type, current_price, discount_percent):
         """
-        Сохраняем цену ТОЛЬКО если она изменилась
+        Сохраняем или обновляем цену товара для пользователя
         Возвращает: (price_changed, previous_price, price_dropped)
         """
         current_price_int = math.floor(current_price)
-        previous_price = self.get_previous_price(product_id)
         
-        if previous_price is None:
-            cursor = self.conn.cursor()
+        # Получаем последнюю запись для этого товара у пользователя
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT price, discount_percent FROM price_history 
+            WHERE user_id = ? AND product_id = ? 
+            ORDER BY checked_at DESC 
+            LIMIT 1
+        ''', (user_id, product_id))
+        result = cursor.fetchone()
+        
+        if result is None:
+            # Первая запись для этого товара у пользователя - просто вставляем
             cursor.execute('''
-                INSERT INTO price_history (product_id, product_type, price, checked_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (product_id, product_type, current_price_int))
+                INSERT INTO price_history (user_id, product_id, product_type, price, discount_percent, checked_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (user_id, product_id, product_type, current_price_int, discount_percent))
             self.conn.commit()
             return True, None, False
         
-        if current_price_int == previous_price:
+        previous_price, previous_discount = result
+        
+        # Если цена И скидка не изменились - ничего не делаем
+        if current_price_int == previous_price and discount_percent == previous_discount:
             return False, previous_price, False
         
-        cursor = self.conn.cursor()
+        # Если товар уже есть - ОБНОВЛЯЕМ существующую запись
         cursor.execute('''
-            INSERT INTO price_history (product_id, product_type, price, checked_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (product_id, product_type, current_price_int))
+            UPDATE price_history 
+            SET price = ?, discount_percent = ?, checked_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND product_id = ? 
+            AND id = (
+                SELECT id FROM price_history 
+                WHERE user_id = ? AND product_id = ? 
+                ORDER BY checked_at DESC 
+                LIMIT 1
+            )
+        ''', (current_price_int, discount_percent, user_id, product_id, user_id, product_id))
+        
         self.conn.commit()
         
         price_dropped = current_price_int < previous_price
         return True, previous_price, price_dropped
+    
+    def update_discount_in_price_history(self, user_id, new_discount_percent):
+        """Обновляет процент скидки в актуальных ценах пользователя"""
+        cursor = self.conn.cursor()
+        
+        try:
+            # Обновляем скидку только в последних записях каждого товара
+            cursor.execute('''
+                UPDATE price_history 
+                SET discount_percent = ?
+                WHERE user_id = ? 
+                AND id IN (
+                    SELECT ph.id
+                    FROM price_history ph
+                    INNER JOIN (
+                        SELECT product_id, MAX(checked_at) as max_date
+                        FROM price_history 
+                        WHERE user_id = ?
+                        GROUP BY product_id
+                    ) latest ON ph.product_id = latest.product_id AND ph.checked_at = latest.max_date
+                )
+            ''', (new_discount_percent, user_id, user_id))
+            
+            updated_count = cursor.rowcount
+            self.conn.commit()
+            
+            print(f"✅ Обновлены скидки для {updated_count} товаров пользователя {user_id}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Ошибка при обновлении скидки в истории цен: {e}")
+            self.conn.rollback()
+            return False
     
     def is_user_waiting_for_input(self, user_id):
         """Проверяет, ожидает ли пользователь ввода (установка цены, порога или скидки)"""
@@ -416,7 +450,6 @@ async def get_detailed_product_price(session, product_id, product_type, discount
 async def filter_products_for_user(application, user_id, user_ps5_price, user_iphone_price, discount_percent, price_threshold, all_ps5_products, all_iphone_products, session):
     """Фильтруем товары для конкретного пользователя с учетом его скидки и автоматического порога"""
     
-    # Проверяем, не ожидает ли пользователь ввода (установка цены, порога или скидки)
     if db.is_user_waiting_for_input(user_id):
         print(f"⏸️ Пользователь {user_id} ожидает ввода, пропускаем проверку цен")
         return
@@ -425,7 +458,6 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
     found_iphone_products = []
     
     if user_ps5_price > 0:
-        # Рассчитываем минимальную цену на основе общего порога
         ps5_min_price = math.floor(user_ps5_price * (price_threshold / 100))
         print(f"🔍 Фильтрация PS5 для пользователя {user_id}, цена: {user_ps5_price}, порог: {price_threshold}% (мин. {ps5_min_price} руб.), скидка: {discount_percent}%")
         
@@ -441,7 +473,10 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
                 detailed_price = await get_detailed_product_price(session, product['id'], 'ps5', discount_percent)
                 if detailed_price and detailed_price < user_ps5_price and detailed_price > user_ps5_price/2:
                     
-                    price_changed, previous_price, price_dropped = db.save_price_if_changed(product['id'], 'ps5', detailed_price)
+                    # ИСПОЛЬЗУЕМ ОБНОВЛЕННЫЙ МЕТОД с user_id и discount_percent
+                    price_changed, previous_price, price_dropped = db.save_price_if_changed(
+                        user_id, product['id'], 'ps5', detailed_price, discount_percent
+                    )
                     never_sent = not db.is_product_sent_recently(user_id, product['id'])
                     
                     if never_sent or price_dropped:
@@ -459,7 +494,6 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
                         })
     
     if user_iphone_price > 0:
-        # Рассчитываем минимальную цену на основе общего порога
         iphone_min_price = math.floor(user_iphone_price * (price_threshold / 100))
         print(f"🔍 Фильтрация iPhone для пользователя {user_id}, цена: {user_iphone_price}, порог: {price_threshold}% (мин. {iphone_min_price} руб.), скидка: {discount_percent}%")
         
@@ -475,7 +509,10 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
                 detailed_price = await get_detailed_product_price(session, product['id'], 'iphone', discount_percent)
                 if detailed_price and detailed_price < user_iphone_price and detailed_price > user_iphone_price/2:
                     
-                    price_changed, previous_price, price_dropped = db.save_price_if_changed(product['id'], 'iphone', detailed_price)
+                    # ИСПОЛЬЗУЕМ ОБНОВЛЕННЫЙ МЕТОД с user_id и discount_percent
+                    price_changed, previous_price, price_dropped = db.save_price_if_changed(
+                        user_id, product['id'], 'iphone', detailed_price, discount_percent
+                    )
                     never_sent = not db.is_product_sent_recently(user_id, product['id'])
                     
                     if never_sent or price_dropped:
@@ -602,7 +639,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = (
         "🤖 **Бот мониторинга цен на Wildberries**\n\n"
-        "🎯 **Что умеет этот бот:**\n"
+        "**Что умеет этот бот:**\n"
         "• Автоматически ищет PS5 и iPhone 16 по вашим ценам\n"
         "• Применяет скидку WB при расчете стоимости\n"
         "• Отслеживает снижение цен\n\n"
@@ -725,7 +762,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "set_discount":
         db.set_waiting_for_price(user_id, 1, 'discount')
         await query.edit_message_text(
-            "🎯 **Установка процента скидки**\n\n"
+            "🏷️ **Установка процента скидки**\n\n"
             "Введите процент скидки WB (только цифры):\n\n"
             "💡 **Пример:** 7\n\n"
             "ℹ️ Бот будет применять эту скидку при расчете итоговой цены.",
@@ -779,7 +816,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_markup=get_main_reply_keyboard()
                     )
                     return
+                
+                # Получаем старую скидку для информационного сообщения
+                _, _, old_discount, _ = db.get_user_settings(user_id)
                     
+                # Устанавливаем новую скидку (метод автоматически обновит историю цен)
                 db.set_user_discount(user_id, value)
                 db.clear_waiting_for_price(user_id)
                 
@@ -789,9 +830,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
+                message = (
+                    f"✅ **Процент скидки изменен:** {old_discount}% → {value}%\n\n"
+                    f"Теперь бот будет применять {value}% скидку при расчете цен.\n\n"
+                )
+                
                 await update.message.reply_text(
-                    f"✅ **Процент скидки установлен:** {value}%\n\n"
-                    f"Теперь бот будет применять {value}% скидку при расчете цен.",
+                    message,
                     reply_markup=reply_markup,
                     parse_mode='Markdown'
                 )
@@ -859,7 +904,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await update.message.reply_text(
                     f"✅ **Максимальная цена для {product_name} установлена:** {value:,} руб.\n\n".replace(',', ' ') +
-                    f"🎯 **Диапазон поиска:** {range_info}\n\n" +
+                    f"**Диапазон поиска:** {range_info}\n\n" +
                     f"🔍 Бот будет искать {product_name} в диапазоне: {range_info}\n",
                     reply_markup=reply_markup,
                     parse_mode='Markdown'
