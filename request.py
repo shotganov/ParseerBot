@@ -118,10 +118,10 @@ search_queries1 = [
 ]
 
 search_queries = [
-            "iPhone 16", "iPhone 16 128gb", "iPhone 16 sim + esim", "iPhone 16 dual sim",
-            "iPhone 16 две сим", "iPhone 16 черный", "iPhone 16 белый", "iPhone 16 синий",
-            "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", "Смартфон iPhone 16 128 Гб",
-            "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
+          "iPhone 16", "iPhone 16 128gb", "iPhone 16 sim + esim", "iPhone 16 dual sim",
+          "iPhone 16 две сим", "iPhone 16 черный", "iPhone 16 белый", "iPhone 16 синий",
+          "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", "iPhone 16 (без Ru Store)", "Смартфон iPhone 16 128 Гб (без Ru Store)", "Смартфон iPhone 16 Без RuStore и MAX", "Смартфон iPhone 16 Без MAX",
+          "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
         ]
     
 
@@ -209,7 +209,7 @@ for i in range(len(all_products)):
   if should_exclude_product(name.lower(), "ps5"):
     continue
   
-  if 524901651 == all_products[i]["id"]:
+  if 567722906 == all_products[i]["id"]:
      print(all_products[i])
   if product_price < max_price + 2000 and product_price > max_price - 10000:
     # Доп проверка цены 

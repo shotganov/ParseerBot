@@ -363,13 +363,13 @@ async def get_products_by_sort(session, product_type):
     else:
         search_queries = [
             "iPhone 16", "iPhone 16 128gb", "iPhone 16 sim + esim", "iPhone 16 dual sim",
-            "iPhone 16 две сим", "iPhone 16 черный", "iPhone 16 белый", "iPhone 16 синий",
-            "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", "Смартфон iPhone 16 128 Гб",
-            "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
+          "iPhone 16 две сим", "iPhone 16 черный", "iPhone 16 белый", "iPhone 16 синий",
+          "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", "iPhone 16 (без Ru Store)", "Смартфон iPhone 16 128 Гб (без Ru Store)", "Смартфон iPhone 16 Без RuStore и MAX", "Смартфон iPhone 16 Без MAX",
+          "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
         ]
     
     for search_query in search_queries:
-        for page in range(1, 5):
+        for page in range(1, 8):
             try:
                 url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=reranking_price_6&ab_testing=false&AppType=1&curr=rub&dest=-1586348&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={search_query}&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false&uclusters=3"
                
