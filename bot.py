@@ -537,16 +537,16 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
         found_iphone_products.sort(key=lambda x: x['price'])
     
     if found_ps5_products:
-        message = "🎮 Найдены PS5 по выгодным ценам (отсортировано по возрастанию цены):\n\n"
+        message = "🎮 Найдены PS5 по выгодным ценам:\n\n"
         for product in found_ps5_products:
             if product['price_dropped'] and product['previous_price']:
                 price_drop = product['previous_price'] - product['price']
                 price_drop_percent = (price_drop / product['previous_price']) * 100
-                message += f"📦 {product['name']}\n"
-                message += f"💰 Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
+                message += f"🔵 {product['name']}\n"
+                message += f"Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
                 message += f"📉 Снижение: {price_drop:,} руб. ({price_drop_percent:.1f}%)\n".replace(',', ' ')
             else:
-                message += f"📦 {product['name']}\n💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
+                message += f"🔵 {product['name']}\n💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
             message += f"🔗 {product['link']}\n\n"
         
         try:
@@ -565,11 +565,11 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
             if product['price_dropped'] and product['previous_price']:
                 price_drop = product['previous_price'] - product['price']
                 price_drop_percent = (price_drop / product['previous_price']) * 100
-                message += f"📦 {product['name']}\n"
-                message += f"💰 Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
+                message += f"🔵 {product['name']}\n"
+                message += f"Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
                 message += f"📉 Снижение: {price_drop:,} руб. ({price_drop_percent:.1f}%)\n".replace(',', ' ')
             else:
-                message += f"📦 {product['name']}\n💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
+                message += f"🔵 {product['name']}\n💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
             message += f"🔗 {product['link']}\n\n"
         
         try:
