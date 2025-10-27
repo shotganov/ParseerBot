@@ -14,8 +14,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
-# BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
+# BOT_TOKEN = 8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg
+BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 
 HEADERS_FIRST = {
     "authority": "u-card.wb.ru",
@@ -52,20 +52,18 @@ class Database:
                 ps5_price INTEGER DEFAULT 0,
                 iphone_price INTEGER DEFAULT 0,
                 discount_percent INTEGER DEFAULT 7,
-                price_threshold INTEGER DEFAULT 50,
+                price_threshold INTEGER DEFAULT 80,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-
+        
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS product_notifications (
-                id INTEGER PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS sent_products (
                 user_id INTEGER,
                 product_id INTEGER,
-                price INTEGER,
-                discount_percent INTEGER DEFAULT 7,
+                product_type TEXT,
                 sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
+                PRIMARY KEY (user_id, product_id)
             )
         ''')
         
@@ -79,13 +77,21 @@ class Database:
         ''')
         
         cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_product_notifications_user_product 
-            ON product_notifications (user_id, product_id, sent_at DESC)
+            CREATE TABLE IF NOT EXISTS price_history (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER,
+                product_id INTEGER,
+                product_type TEXT,
+                price INTEGER,
+                discount_percent INTEGER DEFAULT 7,
+                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
+            )
         ''')
         
         cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_product_notifications_sent_at 
-            ON product_notifications (sent_at)
+            CREATE INDEX IF NOT EXISTS idx_price_history_user_product 
+            ON price_history (user_id, product_id, checked_at DESC)
         ''')
         
         self.conn.commit()
@@ -94,7 +100,7 @@ class Database:
         cursor = self.conn.cursor()
         cursor.execute('SELECT ps5_price, iphone_price, discount_percent, price_threshold FROM user_settings WHERE user_id = ?', (user_id,))
         result = cursor.fetchone()
-        return result if result else (0, 0, 7, 50)
+        return result if result else (0, 0, 7, 80)
     
     def set_user_price(self, user_id, product_type, price):
         cursor = self.conn.cursor()
@@ -108,10 +114,10 @@ class Database:
         else:
             if product_type == 'ps5':
                 cursor.execute('INSERT INTO user_settings (user_id, ps5_price, discount_percent, price_threshold) VALUES (?, ?, ?, ?)', 
-                              (user_id, price, 7, 50))
+                              (user_id, price, 7, 80))
             else:
                 cursor.execute('INSERT INTO user_settings (user_id, iphone_price, discount_percent, price_threshold) VALUES (?, ?, ?, ?)', 
-                              (user_id, price, 7, 50))
+                              (user_id, price, 7, 80))
         
         self.conn.commit()
     
@@ -129,7 +135,7 @@ class Database:
         self.conn.commit()
     
     def set_user_discount(self, user_id, discount_percent):
-        """Установка процента скидки для пользователя с обновлением истории уведомлений"""
+        """Установка процента скидки для пользователя с обновлением истории цен"""
         cursor = self.conn.cursor()
         
         # Получаем старую скидку
@@ -150,9 +156,9 @@ class Database:
         
         self.conn.commit()
         
-        # Если скидка изменилась, обновляем историю уведомлений
+        # Если скидка изменилась, обновляем историю цен
         if old_discount != discount_percent:
-            self.update_discount_in_notifications(user_id, discount_percent)
+            self.update_discount_in_price_history(user_id, discount_percent)
     
     def get_all_users(self):
         cursor = self.conn.cursor()
@@ -184,111 +190,118 @@ class Database:
         self.conn.commit()
     
     def is_product_sent_recently(self, user_id, product_id, hours=24):
-        """Проверяем, отправлялось ли уведомление за последние hours часов"""
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT 1 FROM product_notifications 
+            SELECT 1 FROM sent_products 
             WHERE user_id = ? AND product_id = ? AND sent_at > datetime('now', ?)
         ''', (user_id, product_id, f'-{hours} hours'))
         return cursor.fetchone() is not None
     
-    def save_notification(self, user_id, product_id, current_price, discount_percent):
-      """
-      Сохраняем уведомление только если нужно отправлять
-      Возвращает: (should_send, previous_price, price_dropped)
-      """
-      current_price_int = math.floor(current_price)
-      
-      # Получаем последнюю цену
-      cursor = self.conn.cursor()
-      cursor.execute('''
-          SELECT price FROM product_notifications 
-          WHERE user_id = ? AND product_id = ? 
-          ORDER BY sent_at DESC 
-          LIMIT 1
-      ''', (user_id, product_id))
-      result = cursor.fetchone()
-      
-      previous_price = result[0] if result else None
-      price_dropped = previous_price and current_price_int < previous_price
-      never_sent = not self.is_product_sent_recently(user_id, product_id)
-      
-      # Определяем, нужно ли отправлять уведомление
-      should_send = never_sent or price_dropped
-      
-      # ✅ Сохраняем в БД ТОЛЬКО если нужно отправлять уведомление
-      if should_send:
-          cursor.execute('''
-              INSERT INTO product_notifications 
-              (user_id, product_id, price, discount_percent, sent_at)
-              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-          ''', (user_id, product_id, current_price_int, discount_percent))
-          self.conn.commit()
-          print(f"💾 Сохранено уведомление для товара {product_id}, цена: {current_price_int}")
-      # else:
-      #     print(f"⏭️ Пропуск сохранения для товара {product_id} (цена не изменилась)")
-      
-      return should_send, previous_price, price_dropped
-    
-    def get_previous_price(self, user_id, product_id):
-        """Получаем предыдущую цену товара"""
+    def mark_product_sent(self, user_id, product_id, product_type):
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT price FROM product_notifications 
+            INSERT OR REPLACE INTO sent_products (user_id, product_id, product_type, sent_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (user_id, product_id, product_type))
+        self.conn.commit()
+
+    def cleanup_old_records(self, hours=24):
+        """Очистка записей старше указанного количества часов"""
+        cursor = self.conn.cursor()
+        
+        cursor.execute('DELETE FROM sent_products WHERE sent_at < datetime("now", ?)', (f"-{hours} hours",))
+        sent_deleted = cursor.rowcount
+        
+        cursor.execute('DELETE FROM price_history WHERE checked_at < datetime("now", ?)', ("-7 days",))
+        price_deleted = cursor.rowcount
+        
+        cursor.execute('DELETE FROM temp_data WHERE created_at < datetime("now", ?)', ("-1 hours",))
+        temp_deleted = cursor.rowcount
+        
+        self.conn.commit()
+        return sent_deleted + price_deleted + temp_deleted
+    
+    def get_previous_price(self, user_id, product_id):
+        """Получаем предыдущую цену товара для конкретного пользователя"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT price FROM price_history 
             WHERE user_id = ? AND product_id = ? 
-            ORDER BY sent_at DESC 
+            ORDER BY checked_at DESC 
             LIMIT 1
         ''', (user_id, product_id))
         result = cursor.fetchone()
         return result[0] if result else None
     
-    def get_price_history(self, user_id, product_id, limit=10):
-        """Получаем историю цен для товара (для аналитики)"""
+    def save_price_if_changed(self, user_id, product_id, product_type, current_price, discount_percent):
+        """
+        Сохраняем или обновляем цену товара для пользователя
+        Возвращает: (price_changed, previous_price, price_dropped)
+        """
+        current_price_int = math.floor(current_price)
+        
+        # Получаем последнюю запись для этого товара у пользователя
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT price, sent_at, discount_percent, price_changed, previous_price
-            FROM product_notifications 
+            SELECT price, discount_percent FROM price_history 
             WHERE user_id = ? AND product_id = ? 
-            ORDER BY sent_at DESC 
-            LIMIT ?
-        ''', (user_id, product_id, limit))
-        return cursor.fetchall()
-    
-    def cleanup_old_records(self, hours=24):
-        """Очистка записей старше указанного количества часов"""
-        cursor = self.conn.cursor()
+            ORDER BY checked_at DESC 
+            LIMIT 1
+        ''', (user_id, product_id))
+        result = cursor.fetchone()
         
-        # Удаляем старые уведомления (оставляем историю на 7 дней для аналитики)
-        cursor.execute('DELETE FROM product_notifications WHERE sent_at < datetime("now", ?)', 
-                      ("-7 days",))
-        notifications_deleted = cursor.rowcount
+        if result is None:
+            # Первая запись для этого товара у пользователя - просто вставляем
+            cursor.execute('''
+                INSERT INTO price_history (user_id, product_id, product_type, price, discount_percent, checked_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (user_id, product_id, product_type, current_price_int, discount_percent))
+            self.conn.commit()
+            return True, None, False
         
-        cursor.execute('DELETE FROM temp_data WHERE created_at < datetime("now", ?)', 
-                      ("-1 hours",))
-        temp_deleted = cursor.rowcount
+        previous_price, previous_discount = result
+        
+        # Если цена И скидка не изменились - ничего не делаем
+        if current_price_int == previous_price and discount_percent == previous_discount:
+            return False, previous_price, False
+        
+        # Если товар уже есть - ОБНОВЛЯЕМ существующую запись
+        cursor.execute('''
+            UPDATE price_history 
+            SET price = ?, discount_percent = ?, checked_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND product_id = ? 
+            AND id = (
+                SELECT id FROM price_history 
+                WHERE user_id = ? AND product_id = ? 
+                ORDER BY checked_at DESC 
+                LIMIT 1
+            )
+        ''', (current_price_int, discount_percent, user_id, product_id, user_id, product_id))
         
         self.conn.commit()
-        return notifications_deleted + temp_deleted
+        
+        price_dropped = current_price_int < previous_price
+        return True, previous_price, price_dropped
     
-    def update_discount_in_notifications(self, user_id, new_discount_percent):
-        """Обновляет процент скидки в актуальных уведомлениях пользователя"""
+    def update_discount_in_price_history(self, user_id, new_discount_percent):
+        """Обновляет процент скидки в актуальных ценах пользователя"""
         cursor = self.conn.cursor()
         
         try:
             # Обновляем скидку только в последних записях каждого товара
             cursor.execute('''
-                UPDATE product_notifications 
+                UPDATE price_history 
                 SET discount_percent = ?
                 WHERE user_id = ? 
                 AND id IN (
-                    SELECT pn.id
-                    FROM product_notifications pn
+                    SELECT ph.id
+                    FROM price_history ph
                     INNER JOIN (
-                        SELECT product_id, MAX(sent_at) as max_date
-                        FROM product_notifications 
+                        SELECT product_id, MAX(checked_at) as max_date
+                        FROM price_history 
                         WHERE user_id = ?
                         GROUP BY product_id
-                    ) latest ON pn.product_id = latest.product_id AND pn.sent_at = latest.max_date
+                    ) latest ON ph.product_id = latest.product_id AND ph.checked_at = latest.max_date
                 )
             ''', (new_discount_percent, user_id, user_id))
             
@@ -299,7 +312,7 @@ class Database:
             return True
             
         except Exception as e:
-            print(f"❌ Ошибка при обновлении скидки в уведомлениях: {e}")
+            print(f"❌ Ошибка при обновлении скидки в истории цен: {e}")
             self.conn.rollback()
             return False
     
@@ -355,8 +368,6 @@ async def get_products_by_sort(session, product_type):
     for search_query in search_queries:
         empty_page_count = 0  # Счетчик пустых страниц подряд
         max_empty_pages = 2   # Максимальное количество пустых страниц перед остановкой
-        count_not_find_products = 0
-        max_count_not_find_products = 2
         
         for page in range(1, 100):
             try:
@@ -389,16 +400,10 @@ async def get_products_by_sort(session, product_type):
                 # Сбрасываем счетчик пустых страниц при успешном получении данных
                 empty_page_count = 0
                 
-                if max_count_not_find_products == count_not_find_products:
-                    print(f"🛑 В ответе нет ключа 'products' для запроса более {max_count_not_find_products} раз")
-                    break
-                
                 if "products" not in data:
                     print(f"❌ В ответе нет ключа 'products' для запроса: {search_query}")
-                    count_not_find_products += 1
                     continue
                 
-                count_not_find_products = 0
                 if not data["products"]:
                     print(f"ℹ️ Нет товаров на странице {page} для запроса: {search_query}")
                     # Если страница без товаров, завершаем пагинацию для этого запроса
@@ -475,57 +480,8 @@ async def get_detailed_product_price(session, product_id, product_type, discount
         print(f"❌ Ошибка при получении детальной цены для {product_id}: {e}")
         return None
 
-async def send_product_messages(application, user_id, products, title, max_products_per_message=15):
-    """Отправляет сообщения с товарами, разбивая на части по max_products_per_message"""
-    if not products:
-        return
-    
-    # Сортируем товары по цене
-    products.sort(key=lambda x: x['price'])
-    
-    # Разбиваем товары на группы по max_products_per_message
-    product_chunks = [products[i:i + max_products_per_message] for i in range(0, len(products), max_products_per_message)]
-    
-    for chunk_index, product_chunk in enumerate(product_chunks):
-        message = f"{title}\n\n"
-        
-        # Добавляем информацию о номере части
-        if len(product_chunks) > 1:
-            message += f"*Часть {chunk_index + 1} из {len(product_chunks)}*\n\n"
-        
-        for product in product_chunk:
-            if product['price_dropped'] and product['previous_price']:
-                price_drop = product['previous_price'] - product['price']
-                price_drop_percent = (price_drop / product['previous_price']) * 100
-                message += f"🔵 {product['name']}\n"
-                message += f"Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
-                message += f"📉 Снижение: {price_drop:,} руб. ({price_drop_percent:.1f}%)\n".replace(',', ' ')
-            else:
-                message += f"🔵 {product['name']}\n💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
-            message += f"🔗 {product['link']}\n\n"
-        
-        # Добавляем информацию об общем количестве товаров в последнем сообщении
-        if chunk_index == len(product_chunks) - 1 and len(products) > len(product_chunk):
-            message += f"*Всего найдено товаров: {len(products)}*"
-        
-        try:
-            # Для первого сообщения добавляем клавиатуру, для остальных - без
-            reply_markup = get_main_reply_keyboard() if chunk_index == 0 else None
-            
-            await application.bot.send_message(
-                chat_id=user_id,
-                text=message,
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
-            
-        except Exception as e:
-            print(f"❌ Ошибка отправки сообщения пользователю {user_id}: {e}")
-    
-    print(f"✅ Отправлено {len(product_chunks)} сообщений пользователю {user_id} о {len(products)} товарах")
-
 async def filter_products_for_user(application, user_id, user_ps5_price, user_iphone_price, discount_percent, price_threshold, all_ps5_products, all_iphone_products, session):
-    """Фильтруем товары для конкретного пользователя"""
+    """Фильтруем товары для конкретного пользователя с учетом его скидки и автоматического порога"""
     
     if db.is_user_waiting_for_input(user_id):
         print(f"⏸️ Пользователь {user_id} ожидает ввода, пропускаем проверку цен")
@@ -536,7 +492,7 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
     
     if user_ps5_price > 0:
         ps5_min_price = math.floor(user_ps5_price * (price_threshold / 100))
-        print(f"🔍 Фильтрация PS5 для пользователя {user_id}, цена: {user_ps5_price}, порог: {price_threshold}% (мин. {ps5_min_price} руб.)")
+        print(f"🔍 Фильтрация PS5 для пользователя {user_id}, цена: {user_ps5_price}, порог: {price_threshold}% (мин. {ps5_min_price} руб.), скидка: {discount_percent}%")
         
         for product in all_ps5_products:
             name = str(product["name"])
@@ -550,12 +506,14 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
                 detailed_price = await get_detailed_product_price(session, product['id'], 'ps5', discount_percent)
                 if detailed_price and detailed_price < user_ps5_price and detailed_price > user_ps5_price/2:
                     
-                    should_send, previous_price, price_dropped = db.save_notification(
-                        user_id, product['id'], detailed_price, discount_percent
+                    # ИСПОЛЬЗУЕМ ОБНОВЛЕННЫЙ МЕТОД с user_id и discount_percent
+                    price_changed, previous_price, price_dropped = db.save_price_if_changed(
+                        user_id, product['id'], 'ps5', detailed_price, discount_percent
                     )
+                    never_sent = not db.is_product_sent_recently(user_id, product['id'])
                     
-                    if should_send:
-                        print(f"✅ Найден подходящий PS5: {name} за {detailed_price} руб. "
+                    if never_sent or price_dropped:
+                        print(f"✅ Найден подходящий PS5: {name} за {detailed_price} руб. (со скидкой {discount_percent}%) "
                               f"({'цена упала' if price_dropped else 'новый товар'})")
                         
                         found_ps5_products.append({
@@ -564,12 +522,13 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
                             'price': detailed_price,
                             'previous_price': previous_price,
                             'price_dropped': price_dropped,
-                            'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx"
+                            'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx",
+                            'discount_percent': discount_percent
                         })
     
     if user_iphone_price > 0:
         iphone_min_price = math.floor(user_iphone_price * (price_threshold / 100))
-        print(f"🔍 Фильтрация iPhone для пользователя {user_id}, цена: {user_iphone_price}, порог: {price_threshold}% (мин. {iphone_min_price} руб.)")
+        print(f"🔍 Фильтрация iPhone для пользователя {user_id}, цена: {user_iphone_price}, порог: {price_threshold}% (мин. {iphone_min_price} руб.), скидка: {discount_percent}%")
         
         for product in all_iphone_products:
             name = str(product["name"])
@@ -583,12 +542,14 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
                 detailed_price = await get_detailed_product_price(session, product['id'], 'iphone', discount_percent)
                 if detailed_price and detailed_price < user_iphone_price and detailed_price > user_iphone_price/2:
                     
-                    should_send, previous_price, price_dropped = db.save_notification(
-                        user_id, product['id'], detailed_price, discount_percent
+                    # ИСПОЛЬЗУЕМ ОБНОВЛЕННЫЙ МЕТОД с user_id и discount_percent
+                    price_changed, previous_price, price_dropped = db.save_price_if_changed(
+                        user_id, product['id'], 'iphone', detailed_price, discount_percent
                     )
+                    never_sent = not db.is_product_sent_recently(user_id, product['id'])
                     
-                    if should_send:
-                        print(f"✅ Найден подходящий iPhone: {name} за {detailed_price} руб. "
+                    if never_sent or price_dropped:
+                        print(f"✅ Найден подходящий iPhone: {name} за {detailed_price} руб. (со скидкой {discount_percent}%) "
                               f"({'цена упала' if price_dropped else 'новый товар'})")
                         
                         found_iphone_products.append({
@@ -597,28 +558,63 @@ async def filter_products_for_user(application, user_id, user_ps5_price, user_ip
                             'price': detailed_price,
                             'previous_price': previous_price,
                             'price_dropped': price_dropped,
-                            'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx"
+                            'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx",
+                            'discount_percent': discount_percent
                         })
     
-    # Отправка сообщений с разбивкой по 15 товаров
+    # СОРТИРОВКА ПО ВОЗРАСТАНИЮ ЦЕНЫ
     if found_ps5_products:
-        await send_product_messages(
-            application, 
-            user_id, 
-            found_ps5_products, 
-            "🎮 Найдены PS5 по выгодным ценам:",
-            max_products_per_message=15
-        )
-
+        found_ps5_products.sort(key=lambda x: x['price'])
+    
     if found_iphone_products:
-        await send_product_messages(
-            application, 
-            user_id, 
-            found_iphone_products, 
-            "📱 Найдены iPhone 16 по выгодным ценам:",
-            max_products_per_message=15
-        )
+        found_iphone_products.sort(key=lambda x: x['price'])
+    
+    if found_ps5_products:
+        message = "🎮 Найдены PS5 по выгодным ценам:\n\n"
+        for product in found_ps5_products:
+            if product['price_dropped'] and product['previous_price']:
+                price_drop = product['previous_price'] - product['price']
+                price_drop_percent = (price_drop / product['previous_price']) * 100
+                message += f"🔵 {product['name']}\n"
+                message += f"Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
+                message += f"📉 Снижение: {price_drop:,} руб. ({price_drop_percent:.1f}%)\n".replace(',', ' ')
+            else:
+                message += f"🔵 {product['name']}\n💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
+            message += f"🔗 {product['link']}\n\n"
         
+        try:
+            await application.bot.send_message(chat_id=user_id, text=message, reply_markup=get_main_reply_keyboard())
+            
+            for product in found_ps5_products:
+                db.mark_product_sent(user_id, product['id'], 'ps5')
+            
+            print(f"✅ Отправлено уведомление пользователю {user_id} о {len(found_ps5_products)} PS5")
+        except Exception as e:
+            print(f"❌ Ошибка отправки сообщения пользователю {user_id}: {e}")
+    
+    if found_iphone_products:
+        message = "📱 Найдены iPhone 16 по выгодным ценам (отсортировано по возрастанию цены):\n\n"
+        for product in found_iphone_products:
+            if product['price_dropped'] and product['previous_price']:
+                price_drop = product['previous_price'] - product['price']
+                price_drop_percent = (price_drop / product['previous_price']) * 100
+                message += f"🔵 {product['name']}\n"
+                message += f"Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
+                message += f"📉 Снижение: {price_drop:,} руб. ({price_drop_percent:.1f}%)\n".replace(',', ' ')
+            else:
+                message += f"🔵 {product['name']}\n💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
+            message += f"🔗 {product['link']}\n\n"
+        
+        try:
+            await application.bot.send_message(chat_id=user_id, text=message, reply_markup=get_main_reply_keyboard())
+            
+            for product in found_iphone_products:
+                db.mark_product_sent(user_id, product['id'], 'iphone')
+            
+            print(f"✅ Отправлено уведомление пользователю {user_id} о {len(found_iphone_products)} iPhone")
+        except Exception as e:
+            print(f"❌ Ошибка отправки сообщения пользователю {user_id}: {e}")
+
 async def check_all_prices(application):
     """Асинхронная проверка цен для всех пользователей"""
     try:
@@ -828,10 +824,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "**Как это работает?**\n"
             "Вы задаете процент, и бот сам рассчитывает минимальную цену для отслеживания.\n\n"
             "**Например:**\n"
-            "- Вы ставите порог: 30%\n"
+            "- Вы ставите порог: 70%\n"
             "- Добавляете товар с ценой: 10 000 ₽\n"
-            "- Бот будет автоматически отслеживать его в диапазоне от 3 000 ₽ до 10 000 ₽.\n\n"
-            "**Текущее значение:** 50%\n\n"
+            "- Бот будет автоматически отслеживать его в диапазоне от 7 000 ₽ до 10 000 ₽.\n\n"
+            "**Текущее значение:** 80%\n\n"
             "Введите процент от 0 до 100. Чтобы отключить, введите 0.",
             parse_mode='Markdown'
         )

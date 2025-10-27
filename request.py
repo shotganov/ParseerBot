@@ -53,6 +53,26 @@ import requests
 
 HEADERS = {
     "authority": "u-card.wb.ru",
+    "authorization" : "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjE1NzE2MTgsInVzZXIiOiI1NDU4NDA2MiIsInNoYXJkX2tleSI6IjYiLCJjbGllbnRfaWQiOiJ3YiIsInNlc3Npb25faWQiOiJhZjJjOGI2ZDYxNDc0OTNhODkzYTlkNTY2Y2M0YWU3MyIsInZhbGlkYXRpb25fa2V5IjoiMjViNDExMjQwODdiMzM4YTFkMDBiOWVmYTZhYzlkOGZkYmVlZDRlNDcyMGVlMjQ2ZDdmM2YwMGI5YjFjODAxZCIsInBob25lIjoiSmI5N1U0UTdYa1pBT1I4SWMrUFVkZz09IiwidXNlcl9yZWdpc3RyYXRpb25fZHQiOjE2OTUwNDgzMzksInZlcnNpb24iOjJ9.JRRx-xVmOPm4021i8-RcLd1u3mKy0mAd8Gr182I-a-kf-WPDBRuu1sSUxg-A9xApUsdmZuWVvFIBdFVZHrP16EJkS88ObNJjKtguTf72QDfjn3pcua95vONpV_tOovviYUeN7vr9OgaX9mMEMcDOOdaR__mZMLEVUkkuBx54zblej_xQMtpW6wAYMiqnFi0tIKwR2Csfe_6w0nPUS3PQQ1opbmoH8kXrgbRzDD144Ib73NZo8rwc3BVOkg4a8tINQGuLxInpK8e5F4KN92HGRJdkCD_twsULXMiloZsWA42Biv1uPVCTtt0jr_thSgEpdBb3YfD-aYsZKT9oSkD1uQ",
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "accept-language": "ru,en;q=0.9,en-GB;q=0.8,en-US;q=0.7",
+    "origin": "https://www.wildberries.ru",
+    "priority": "u=1, i",
+    "referer": "https://www.wildberries.ru/",
+    "sec-ch-ua": '"Microsoft Edge";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "cross-site",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
+}
+
+
+HEADERS_ = {
+    "authority": "u-card.wb.ru",
+  
     "accept": "*/*",
     "accept-encoding": "gzip, deflate, br, zstd",
     "accept-language": "ru,en;q=0.9,en-GB;q=0.8,en-US;q=0.7",
@@ -73,11 +93,11 @@ def get_products_by_sort(query):
     products = []
     product_ids = set()
     
-    for page in range(1, 10):
+    for page in range(1, 100):
         try:
-            url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=reranking_price_6&ab_testing=false&appType=1&curr=rub&dest=-1586348&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={query}&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false&uclusters=3"
+            url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
            
-            response = requests.get(url)
+            response = requests.get(url, headers=HEADERS)
             data = response.json()
             length = len(products)
             for product in data["products"]:
@@ -85,23 +105,6 @@ def get_products_by_sort(query):
                     product_ids.add(product["id"])
                     products.append(product)
 
-            url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=reranking_price_6&ab_testing=false&appType=1&curr=rub&dest=-1586348&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=3"
-           
-            response = requests.get(url)
-            data = response.json()
-            for product in data["products"]:
-                if product["id"] not in product_ids:
-                    product_ids.add(product["id"])
-                    products.append(product)
-
-            url = f"https://u-search.wb.ru/exactmatch/ru/common/v18/search?ab_testing=false&ab_testing=false&appType=1&curr=rub&dest=-1586361&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&priceU=7139400;10000000&query={query}&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false"
-
-            response = requests.get(url)
-            data = response.json()
-            for product in data["products"]:
-                if product["id"] not in product_ids:
-                    product_ids.add(product["id"])
-                    products.append(product)
             if length == len(products):
                 break
         except Exception as e:
@@ -161,19 +164,19 @@ search_queries16 = [
           "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
         ]
 
-search_queries = [
-    "iPhone 16 Pro", "iPhone 16 Pro 256gb", "iPhone 16 Pro sim + esim", "iPhone 16 Pro dual sim",
-    "iPhone 16 Pro две сим", "iPhone 16 Pro титановый", "iPhone 16 Pro черный", "iPhone 16 Pro белый",
-    "iPhone 16 Pro натуральный титан", "iPhone 16 Pro пустынный титан",
-    "Cмартфон Apple iPhone 16 Pro black", "Cмартфон Apple iPhone 16 Pro white",
-    "Cмартфон Apple iPhone 16 Pro natural titanium", "Cмартфон Apple iPhone 16 Pro desert titanium", "Смартфон iPhone 16 Pro (nano SIM+eSIM), 256Gb, Desert",
-    "Cмартфон Apple iPhone 16 Pro Натуральный титан", "Cмартфон Apple iPhone 16 Pro Песочный титан", "Телефон iphone 16 pro 256 ГБ"
-    "iPhone 16 Pro 256гб Золотистый",
-    "Смартфон iPhone 16 Pro 128 Гб (без Ru Store)", "Смартфон iPhone 16 Pro 256 Гб (без Ru Store)", "iPhone 16 Pro 256GB Desert без RuStore", ""
-    "Смартфон iPhone 16 Pro Без RuStore и MAX", "Смартфон iPhone 16 Pro Без MAX", "iPhone 16 Pro 256GB Desert,без RuStore", 
-    "iPhone 16 Pro 256 black", "iPhone 16 Pro 256 white", "iPhone 16 Pro 256 natural titanium", "iPhone 16 Pro 256 desert titanium",
-    "iPhone 16 Pro 256 ГБ Desert Titanium Nano-sim+eSIM", "iPhone 16 Pro 256 ГБ Black Titanium Nano-sim+eSIM", "Смартфон iPhone 16 Pro 256GB nano SIM + eSIM", "iPhone 16 Pro 256GB, White Titanium (Белый) SIM+eSIM",
-]
+# search_queries = [
+#     "iPhone 16 Pro", "iPhone 16 Pro 256gb", "iPhone 16 Pro sim + esim", "iPhone 16 Pro dual sim",
+#     "iPhone 16 Pro две сим", "iPhone 16 Pro титановый", "iPhone 16 Pro черный", "iPhone 16 Pro белый",
+#     "iPhone 16 Pro натуральный титан", "iPhone 16 Pro пустынный титан",
+#     "Cмартфон Apple iPhone 16 Pro black", "Cмартфон Apple iPhone 16 Pro white",
+#     "Cмартфон Apple iPhone 16 Pro natural titanium", "Cмартфон Apple iPhone 16 Pro desert titanium", "Смартфон iPhone 16 Pro (nano SIM+eSIM), 256Gb, Desert",
+#     "Cмартфон Apple iPhone 16 Pro Натуральный титан", "Cмартфон Apple iPhone 16 Pro Песочный титан", "Телефон iphone 16 pro 256 ГБ"
+#     "iPhone 16 Pro 256гб Золотистый",
+#     "Смартфон iPhone 16 Pro 128 Гб (без Ru Store)", "Смартфон iPhone 16 Pro 256 Гб (без Ru Store)", "iPhone 16 Pro 256GB Desert без RuStore", ""
+#     "Смартфон iPhone 16 Pro Без RuStore и MAX", "Смартфон iPhone 16 Pro Без MAX", "iPhone 16 Pro 256GB Desert,без RuStore", 
+#     "iPhone 16 Pro 256 black", "iPhone 16 Pro 256 white", "iPhone 16 Pro 256 natural titanium", "iPhone 16 Pro 256 desert titanium",
+#     "iPhone 16 Pro 256 ГБ Desert Titanium Nano-sim+eSIM", "iPhone 16 Pro 256 ГБ Black Titanium Nano-sim+eSIM", "Смартфон iPhone 16 Pro 256GB nano SIM + eSIM", "iPhone 16 Pro 256GB, White Titanium (Белый) SIM+eSIM",
+# ]
 
 
 # "https://u-search.wb.ru/exactmatch/ru/common/v18/search?ab_testing=false&ab_testing=false&appType=1&curr=rub&dest=-1586361&hide_dtype=11&inheritFilters=false&lang=ru&page=4&query=iphone%2016%20pro&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false"
@@ -191,7 +194,7 @@ iphone_exclude_keywords16 = [
 
 iphone_exclude_keywords = [
     # другие модели iPhone
-    "15", "14", "13", "12", "11", "10", "x", "xs", "xr", "8", "7", "se",
+    "15", "14", "13", "12", "11", "10", "x", "xs", "xr", "8", "7",
     "iphone 15", "iphone 14", "iphone 13", "iphone 12", "iphone 11",
     "iphone xs", "iphone xr", "iphone x", "iphone se", "iphone 8", "iphone 7", "iphone 6",
     
@@ -218,8 +221,8 @@ ps5_exclude_keywords = [
 
 all_products = []
 product_ids = set()
-
-for search_query in search_queries:
+search_querys = ["iphone 16 pro 256"]
+for search_query in search_querys:
     print(f"\n=== Поиск: '{search_query}' ===")
     
     products = get_products_by_sort(search_query)
@@ -234,22 +237,13 @@ for search_query in search_queries:
     
     print(f"Добавлено: {new_count}, всего: {len(all_products)}")
 
-url = "https://u-search.wb.ru/exactmatch/ru/common/v18/search?ab_testing=false&ab_testing=false&appType=1&curr=rub&dest=-1586361&hide_dtype=11&inheritFilters=false&lang=ru&page=1&priceU=7139400;10000000&query=iphone%2016%20pro%20256&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false"
-
-response = requests.get(url)
-data = response.json()
-
-for product in data["products"]:
-    if product["id"] not in product_ids:
-        product_ids.add(product["id"])
-        all_products.append(product)
 
 print(len(all_products))
 
 print(f"\n=== ФИНАЛЬНЫЙ РЕЗУЛЬТАТ ===")
 print(f"Итого собрано товаров: {len(all_products)}")
 
-def should_exclude_product(name, product_type):
+def should_exclude_product(id, name, product_type):
     """
     Проверяет, нужно ли исключить товар по названию
     
@@ -268,6 +262,8 @@ def should_exclude_product(name, product_type):
     
     for keyword in exclude_keywords:
         if keyword in name:
+            if 481232395 == id:
+                print(keyword)
             return True
     
     return False
@@ -275,22 +271,18 @@ def should_exclude_product(name, product_type):
 
 
 links = []
-max_price = 95000
+max_price = 94000
 for i in range(len(all_products)):
     name = str(all_products[i]["name"])
     product_price = int(all_products[i]['sizes'][0]['price']['product'])/100 * 0.93 
-    if should_exclude_product(name.lower(), "iphone"):
+    if should_exclude_product(all_products[i]['id'], name.lower(), "iphone]"):
         continue
     
-    if 543722329 == all_products[i]["id"]:
-        print(all_products[i], name)
-    if 387657254 == all_products[i]["id"]:
-        print(all_products[i], name)
-    
 
+   
     if product_price < max_price + 2000 and product_price > max_price - 10000:
-        # Доп проверка цены 
-        req = requests.get(f"https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586361&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm={all_products[i]['id']}&ignore_stocks=true", headers=HEADERS)
+        # # Доп проверка цены 
+        req = requests.get(f"https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586361&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm={all_products[i]['id']}&ignore_stocks=true", headers=HEADERS_)
         req_data = req.json()
         try:
             product_price = int(req_data['products'][0]['sizes'][0]['price']['product'])/100 * 0.93
