@@ -14,7 +14,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = ""
+BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
 # BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 
 HEADERS_FIRST = {
@@ -61,10 +61,9 @@ class Database:
             CREATE TABLE IF NOT EXISTS product_notifications (
                 user_id INTEGER,
                 product_id INTEGER,
-                current_price INTEGER,
-                previous_price INTEGER,
+                current_price INTEGER,  
                 discount_percent INTEGER DEFAULT 7,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  # ТОЛЬКО для очистки
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, product_id),
                 FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
             )
@@ -79,15 +78,15 @@ class Database:
             )
         ''')
         
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_product_notifications_user_product 
-            ON product_notifications (user_id, product_id, sent_at DESC)
-        ''')
+        # cursor.execute('''
+        #     CREATE INDEX IF NOT EXISTS idx_product_notifications_user_product 
+        #     ON product_notifications (user_id, product_id, sent_at DESC)
+        # ''')
         
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_product_notifications_sent_at 
-            ON product_notifications (sent_at)
-        ''')
+        # cursor.execute('''
+        #     CREATE INDEX IF NOT EXISTS idx_product_notifications_sent_at 
+        #     ON product_notifications (sent_at)
+        # ''')
         
         self.conn.commit()
     
@@ -189,7 +188,7 @@ class Database:
         cursor = self.conn.cursor()
         cursor.execute('''
             SELECT 1 FROM product_notifications 
-            WHERE user_id = ? AND product_id = ? AND sent_at > datetime('now', ?)
+            WHERE user_id = ? AND product_id = ? AND last_updated > datetime('now', ?)
         ''', (user_id, product_id, f'-{hours} hours'))
         return cursor.fetchone() is not None
     
@@ -204,7 +203,7 @@ class Database:
       
       # Ищем существующую запись
       cursor.execute('''
-          SELECT current_price, previous_price 
+          SELECT current_price 
           FROM product_notifications 
           WHERE user_id = ? AND product_id = ?
       ''', (user_id, product_id))
@@ -213,8 +212,6 @@ class Database:
       if result:
           # Запись существует
           existing_price = result[0]
-          existing_previous_price = result[1]
-          
           price_dropped = current_price_int < existing_price
           
           if price_dropped:
@@ -222,25 +219,23 @@ class Database:
               cursor.execute('''
                   UPDATE product_notifications 
                   SET current_price = ?, 
-                      previous_price = ?,
-                      discount_percent = ?
+                      discount_percent = ?,
+                      last_updated = CURRENT_TIMESTAMP
                   WHERE user_id = ? AND product_id = ?
-              ''', (current_price_int, existing_price, discount_percent, user_id, product_id))
+              ''', (current_price_int, discount_percent, user_id, product_id))
               
               self.conn.commit()
               print(f"📉 Цена обновлена для товара {product_id}: {existing_price} → {current_price_int}")
-              return True, existing_price, True
-              
+              return True, existing_price, True   
           else:
-              # Цена не изменилась или выросла - ничего не делаем
               return False, existing_price, False
               
       else:
           # Новая запись - товар увидели впервые
           cursor.execute('''
               INSERT INTO product_notifications 
-              (user_id, product_id, current_price, previous_price, discount_percent)
-              VALUES (?, ?, ?, NULL, ?)
+              (user_id, product_id, current_price, discount_percent)
+              VALUES (?, ?, ?, ?)
           ''', (user_id, product_id, current_price_int, discount_percent))
           
           self.conn.commit()
@@ -248,10 +243,10 @@ class Database:
           return True, None, False
     
     def get_previous_price(self, user_id, product_id):
-      """Получаем предыдущую цену товара"""
+      """Получаем предыдущую цену товара (теперь это просто current_price из БД)"""
       cursor = self.conn.cursor()
       cursor.execute('''
-          SELECT previous_price FROM product_notifications 
+          SELECT current_price FROM product_notifications 
           WHERE user_id = ? AND product_id = ?
       ''', (user_id, product_id))
       result = cursor.fetchone()
@@ -261,10 +256,10 @@ class Database:
         """Получаем историю цен для товара (для аналитики)"""
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT price, sent_at, discount_percent, price_changed, previous_price
+            SELECT price, last_updated, discount_percent, price_changed, previous_price
             FROM product_notifications 
             WHERE user_id = ? AND product_id = ? 
-            ORDER BY sent_at DESC 
+            ORDER BY last_updated DESC 
             LIMIT ?
         ''', (user_id, product_id, limit))
         return cursor.fetchall()
@@ -286,37 +281,26 @@ class Database:
       return notifications_deleted + temp_deleted
     
     def update_discount_in_notifications(self, user_id, new_discount_percent):
-        """Обновляет процент скидки в актуальных уведомлениях пользователя"""
-        cursor = self.conn.cursor()
-        
-        try:
-            # Обновляем скидку только в последних записях каждого товара
-            cursor.execute('''
-                UPDATE product_notifications 
-                SET discount_percent = ?
-                WHERE user_id = ? 
-                AND id IN (
-                    SELECT pn.id
-                    FROM product_notifications pn
-                    INNER JOIN (
-                        SELECT product_id, MAX(sent_at) as max_date
-                        FROM product_notifications 
-                        WHERE user_id = ?
-                        GROUP BY product_id
-                    ) latest ON pn.product_id = latest.product_id AND pn.sent_at = latest.max_date
-                )
-            ''', (new_discount_percent, user_id, user_id))
-            
-            updated_count = cursor.rowcount
-            self.conn.commit()
-            
-            print(f"✅ Обновлены скидки для {updated_count} товаров пользователя {user_id}")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Ошибка при обновлении скидки в уведомлениях: {e}")
-            self.conn.rollback()
-            return False
+      """Обновляет процент скидки во всех уведомлениях пользователя"""
+      cursor = self.conn.cursor()
+      
+      try:
+          cursor.execute('''
+              UPDATE product_notifications 
+              SET discount_percent = ?
+              WHERE user_id = ?
+          ''', (new_discount_percent, user_id))
+          
+          updated_count = cursor.rowcount
+          self.conn.commit()
+          
+          print(f"✅ Обновлены скидки для {updated_count} товаров пользователя {user_id}")
+          return True
+          
+      except Exception as e:
+          print(f"❌ Ошибка при обновлении скидки в уведомлениях: {e}")
+          self.conn.rollback()
+          return False
     
     def is_user_waiting_for_input(self, user_id):
         """Проверяет, ожидает ли пользователь ввода (установка цены, порога или скидки)"""
