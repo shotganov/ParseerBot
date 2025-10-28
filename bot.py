@@ -14,7 +14,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+BOT_TOKEN = ""
 # BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 
 HEADERS_FIRST = {
@@ -59,12 +59,13 @@ class Database:
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS product_notifications (
-                id INTEGER PRIMARY KEY,
                 user_id INTEGER,
                 product_id INTEGER,
-                price INTEGER,
+                current_price INTEGER,
+                previous_price INTEGER,
                 discount_percent INTEGER DEFAULT 7,
-                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  # ТОЛЬКО для очистки
+                PRIMARY KEY (user_id, product_id),
                 FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
             )
         ''')
@@ -194,53 +195,67 @@ class Database:
     
     def save_notification(self, user_id, product_id, current_price, discount_percent):
       """
-      Сохраняем уведомление только если нужно отправлять
+      Сохраняем/обновляем уведомление только если нужно отправлять
       Возвращает: (should_send, previous_price, price_dropped)
       """
       current_price_int = math.floor(current_price)
       
-      # Получаем последнюю цену
       cursor = self.conn.cursor()
+      
+      # Ищем существующую запись
       cursor.execute('''
-          SELECT price FROM product_notifications 
-          WHERE user_id = ? AND product_id = ? 
-          ORDER BY sent_at DESC 
-          LIMIT 1
+          SELECT current_price, previous_price 
+          FROM product_notifications 
+          WHERE user_id = ? AND product_id = ?
       ''', (user_id, product_id))
       result = cursor.fetchone()
       
-      previous_price = result[0] if result else None
-      price_dropped = previous_price and current_price_int < previous_price
-      never_sent = not self.is_product_sent_recently(user_id, product_id)
-      
-      # Определяем, нужно ли отправлять уведомление
-      should_send = never_sent or price_dropped
-      
-      # ✅ Сохраняем в БД ТОЛЬКО если нужно отправлять уведомление
-      if should_send:
+      if result:
+          # Запись существует
+          existing_price = result[0]
+          existing_previous_price = result[1]
+          
+          price_dropped = current_price_int < existing_price
+          
+          if price_dropped:
+              # Цена упала - обновляем запись
+              cursor.execute('''
+                  UPDATE product_notifications 
+                  SET current_price = ?, 
+                      previous_price = ?,
+                      discount_percent = ?
+                  WHERE user_id = ? AND product_id = ?
+              ''', (current_price_int, existing_price, discount_percent, user_id, product_id))
+              
+              self.conn.commit()
+              print(f"📉 Цена обновлена для товара {product_id}: {existing_price} → {current_price_int}")
+              return True, existing_price, True
+              
+          else:
+              # Цена не изменилась или выросла - ничего не делаем
+              return False, existing_price, False
+              
+      else:
+          # Новая запись - товар увидели впервые
           cursor.execute('''
               INSERT INTO product_notifications 
-              (user_id, product_id, price, discount_percent, sent_at)
-              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+              (user_id, product_id, current_price, previous_price, discount_percent)
+              VALUES (?, ?, ?, NULL, ?)
           ''', (user_id, product_id, current_price_int, discount_percent))
+          
           self.conn.commit()
-          print(f"💾 Сохранено уведомление для товара {product_id}, цена: {current_price_int}")
-      # else:
-      #     print(f"⏭️ Пропуск сохранения для товара {product_id} (цена не изменилась)")
-      
-      return should_send, previous_price, price_dropped
+          print(f"🆕 Новый товар {product_id} добавлен, цена: {current_price_int}")
+          return True, None, False
     
     def get_previous_price(self, user_id, product_id):
-        """Получаем предыдущую цену товара"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT price FROM product_notifications 
-            WHERE user_id = ? AND product_id = ? 
-            ORDER BY sent_at DESC 
-            LIMIT 1
-        ''', (user_id, product_id))
-        result = cursor.fetchone()
-        return result[0] if result else None
+      """Получаем предыдущую цену товара"""
+      cursor = self.conn.cursor()
+      cursor.execute('''
+          SELECT previous_price FROM product_notifications 
+          WHERE user_id = ? AND product_id = ?
+      ''', (user_id, product_id))
+      result = cursor.fetchone()
+      return result[0] if result else None
     
     def get_price_history(self, user_id, product_id, limit=10):
         """Получаем историю цен для товара (для аналитики)"""
@@ -255,20 +270,20 @@ class Database:
         return cursor.fetchall()
     
     def cleanup_old_records(self, hours=24):
-        """Очистка записей старше указанного количества часов"""
-        cursor = self.conn.cursor()
-        
-        # Удаляем старые уведомления (оставляем историю на 7 дней для аналитики)
-        cursor.execute('DELETE FROM product_notifications WHERE sent_at < datetime("now", ?)', 
-                      ("-7 days",))
-        notifications_deleted = cursor.rowcount
-        
-        cursor.execute('DELETE FROM temp_data WHERE created_at < datetime("now", ?)', 
-                      ("-1 hours",))
-        temp_deleted = cursor.rowcount
-        
-        self.conn.commit()
-        return notifications_deleted + temp_deleted
+      """Очистка записей старше указанного количества часов"""
+      cursor = self.conn.cursor()
+      
+      # Удаляем старые уведомления
+      cursor.execute('DELETE FROM product_notifications WHERE last_updated < datetime("now", ?)', 
+                    (f"-{hours} hours",))
+      notifications_deleted = cursor.rowcount
+      
+      cursor.execute('DELETE FROM temp_data WHERE created_at < datetime("now", ?)', 
+                    ("-1 hours",))
+      temp_deleted = cursor.rowcount
+      
+      self.conn.commit()
+      return notifications_deleted + temp_deleted
     
     def update_discount_in_notifications(self, user_id, new_discount_percent):
         """Обновляет процент скидки в актуальных уведомлениях пользователя"""
