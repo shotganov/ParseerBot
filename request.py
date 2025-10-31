@@ -53,7 +53,7 @@ import requests
 
 HEADERS = {
     "authority": "u-card.wb.ru",
-    "authorization" : "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjE1NzE2MTgsInVzZXIiOiI1NDU4NDA2MiIsInNoYXJkX2tleSI6IjYiLCJjbGllbnRfaWQiOiJ3YiIsInNlc3Npb25faWQiOiJhZjJjOGI2ZDYxNDc0OTNhODkzYTlkNTY2Y2M0YWU3MyIsInZhbGlkYXRpb25fa2V5IjoiMjViNDExMjQwODdiMzM4YTFkMDBiOWVmYTZhYzlkOGZkYmVlZDRlNDcyMGVlMjQ2ZDdmM2YwMGI5YjFjODAxZCIsInBob25lIjoiSmI5N1U0UTdYa1pBT1I4SWMrUFVkZz09IiwidXNlcl9yZWdpc3RyYXRpb25fZHQiOjE2OTUwNDgzMzksInZlcnNpb24iOjJ9.JRRx-xVmOPm4021i8-RcLd1u3mKy0mAd8Gr182I-a-kf-WPDBRuu1sSUxg-A9xApUsdmZuWVvFIBdFVZHrP16EJkS88ObNJjKtguTf72QDfjn3pcua95vONpV_tOovviYUeN7vr9OgaX9mMEMcDOOdaR__mZMLEVUkkuBx54zblej_xQMtpW6wAYMiqnFi0tIKwR2Csfe_6w0nPUS3PQQ1opbmoH8kXrgbRzDD144Ib73NZo8rwc3BVOkg4a8tINQGuLxInpK8e5F4KN92HGRJdkCD_twsULXMiloZsWA42Biv1uPVCTtt0jr_thSgEpdBb3YfD-aYsZKT9oSkD1uQ",
+    "authorization" : "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjE3NzEzNTcsInVzZXIiOiI1NzMxNjk0NCIsInNoYXJkX2tleSI6IjE2IiwiY2xpZW50X2lkIjoid2IiLCJzZXNzaW9uX2lkIjoiODUzZTEwYTE4NGRmNDc5NmEyNjYyNzRiY2ZjMzMzN2UiLCJ2YWxpZGF0aW9uX2tleSI6IjM5ODA3OGQ0N2VlZTk4NzgxNjQ4MTg3ZWE3ZDY3ZDE0ZmM3OGZlYWFjYjljNWI2Y2U4YjU4NTlmMGM0YTVhNDAiLCJwaG9uZSI6InhMK29IODloM2Q0OFlpTnVIUVpaK3c9PSIsInVzZXJfcmVnaXN0cmF0aW9uX2R0IjoxNjg1Mzg3MzI0LCJ2ZXJzaW9uIjoyfQ.AUnDL_lNpQRFaFBc_UjzD0ChFk8v0q_7hfZ_qp3OAgitskB7x7MbVvawUXh5wL11F3dHGyRpJH1UomPdtRbvR_-pCLsgJRRoDRnYmxGM1sw4ItLv1Ez1RiXamtzR3-aebJ0Xgg_wuqDkyzEi6VWd_QzIWtzC1LGpxxsMKL3LMIATQwjoWc7B6b4uGzRMVqM9XpCXXzGNlwwi5B4vzPkDVBtWEmxJU1pQUlk72jxdPm_uYVeLsvhHZvhmtVyYcIiD17EncnlLcEBvyfmSxl6NN8j5uOn6_7XJ9u1ZzeD8dJE0OOiWIe43kpYW5Sr6x9LGPBFcYTT4mwTXk7CTDXnyPg",
     "accept": "*/*",
     "accept-encoding": "gzip, deflate, br, zstd",
     "accept-language": "ru,en;q=0.9,en-GB;q=0.8,en-US;q=0.7",
@@ -88,29 +88,7 @@ HEADERS_ = {
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"
 }
 
-def get_products_by_sort(query):
-    """Получаем товары с разными сортировками"""
-    products = []
-    product_ids = set()
-    
-    for page in range(1, 100):
-        try:
-            url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
-           
-            response = requests.get(url, headers=HEADERS)
-            data = response.json()
-            length = len(products)
-            for product in data["products"]:
-                if product["id"] not in product_ids:
-                    product_ids.add(product["id"])
-                    products.append(product)
 
-            if length == len(products):
-                break
-        except Exception as e:
-            break
-    
-    return products
 
 
 # Примеры использования:
@@ -185,49 +163,84 @@ search_queries16 = [
 
 
 
-iphone_exclude_keywords16 = [
-    "15", "14", "13", "11", "iphone 15", "iphone 14", "iphone 13", "iphone 12", "iphone 11", "iphone xr", "iphone xs", "iphone x", "iphone 8", "iphone 7", "iphone 6",
-    "16e", "16 e", "16 plus", "16 plus",
-    "восстановленный", "ремоторизованный", "refurbished", "б/у", "used",
-    "восстановлен", "отремонтированный", "восстанавливать"
-]
+# iphone_exclude_keywords16 = [
+#     "15", "14", "13", "11", "iphone 15", "iphone 14", "iphone 13", "iphone 12", "iphone 11", "iphone xr", "iphone xs", "iphone x", "iphone 8", "iphone 7", "iphone 6",
+#     "16e", "16 e", "16 plus", "16 plus",
+#     "восстановленный", "ремоторизованный", "refurbished", "б/у", "used",
+#     "восстановлен", "отремонтированный", "восстанавливать"
+# ]
 
-iphone_exclude_keywords = [
-    # другие модели iPhone
-    "15", "14", "13", "12", "11", "10", "x", "xs", "xr", "8", "7",
-    "iphone 15", "iphone 14", "iphone 13", "iphone 12", "iphone 11",
-    "iphone xs", "iphone xr", "iphone x", "iphone se", "iphone 8", "iphone 7", "iphone 6",
+# iphone_exclude_keywords = [
+#     # другие модели iPhone
+#     "15", "14", "13", "12", "11", "10", "x", "xs", "xr", "8", "7",
+#     "iphone 15", "iphone 14", "iphone 13", "iphone 12", "iphone 11",
+#     "iphone xs", "iphone xr", "iphone x", "iphone se", "iphone 8", "iphone 7", "iphone 6",
     
-    # другие версии iPhone 16
-    "16e", "16 e", "16 plus", "16 plus", "16 pro max", "pro max", "max",
-    "iphone 16 128", "iphone 16 256", "iphone 16 512", "16 cn", "16 CN"
+#     # другие версии iPhone 16
+#     "16e", "16 e", "16 plus", "16 plus", "16 pro max", "pro max", "max",
+#     "iphone 16 128", "iphone 16 256", "iphone 16 512", "16 cn", "16 CN"
 
-    # восстановленные, б/у, отремонтированные
-    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
-    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "repack",
-    "repaired", "renewed", "pre-owned", "asis", "ASIS", "обменка!", "обменка"
+#     # восстановленные, б/у, отремонтированные
+#     "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
+#     "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка!", "обменка"
 
-    # версии без нужного объема памяти
-    "128", "512", "1tb", "1 tb", "tb", "64",
-]
+#     # версии без нужного объема памяти
+#     "128", "512", "1tb", "1 tb", "tb", "64",
+# ]
+
 
 
 # Список для исключения PS5 без дисковода (в нижнем регистре)
-ps5_exclude_keywords = [
-    "digital", "digital edition", "digital version",
-    "без дисковода", "без привода", "бездисковый", "бездисковая",
-    "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии"
+# ps5_exclude_keywords = [
+#     "digital", "digital edition", "digital version",
+#     "без дисковода", "без привода", "бездисковый", "бездисковая",
+#     "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии"
+# ]
+
+iphone_exclude_keywords_16pro = [
+        "15", "14", "13", "11", "10", "xs", "xr", "7",
+        "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro",
+        "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
+        "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
+        "128", "512"
 ]
+
+def get_products_by_sort(query):
+    """Получаем товары с разными сортировками"""
+    products = []
+    product_ids = set()
+    max_count = 3
+    count = 0
+    for page in range(1, 100):
+        try:
+            url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
+           
+            response = requests.get(url, headers=HEADERS, timeout=5)
+            data = response.json()
+            length = len(products)
+            for product in data["products"]:
+                if product["id"] not in product_ids:
+                    product_ids.add(product["id"])
+                    products.append(product)
+
+            if length == len(products):
+                count += 1
+                if count == max_count:
+                  count = 0
+                  break
+        except Exception as e:
+            break
+    
+    return products
 
 all_products = []
 product_ids = set()
-search_querys = ["iphone 16 pro 256"]
+search_querys = ["iPhone 16 256"]
 for search_query in search_querys:
     print(f"\n=== Поиск: '{search_query}' ===")
     
     products = get_products_by_sort(search_query)
-    
-    # Добавляем только новые товары
+
     new_count = 0
     for product in products:
         if product["id"] not in product_ids:
@@ -255,15 +268,13 @@ def should_exclude_product(id, name, product_type):
         bool: True если товар нужно исключить, False если оставить
     """
     
-    if product_type == "ps5":
-        exclude_keywords = ps5_exclude_keywords
-    else:  # iphone
-        exclude_keywords = iphone_exclude_keywords
+   
+    exclude_keywords = iphone_exclude_keywords_16pro
     
     for keyword in exclude_keywords:
         if keyword in name:
-            if 481232395 == id:
-                print(keyword)
+            if id == 567722907:
+              print(keyword)
             return True
     
     return False
@@ -271,20 +282,22 @@ def should_exclude_product(id, name, product_type):
 
 
 links = []
-max_price = 94000
+max_price = 62000
 for i in range(len(all_products)):
+    id = int(all_products[i]['id'])
     name = str(all_products[i]["name"])
     product_price = int(all_products[i]['sizes'][0]['price']['product'])/100 * 0.93 
-    if should_exclude_product(all_products[i]['id'], name.lower(), "iphone]"):
+
+    if id == 561004856:
+        print(name.lower())
+    if  should_exclude_product(id, name.lower(), "iphone"):
         continue
     
-
-   
     if product_price < max_price + 2000 and product_price > max_price - 10000:
         # # Доп проверка цены 
         req = requests.get(f"https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586361&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm={all_products[i]['id']}&ignore_stocks=true", headers=HEADERS_)
-        req_data = req.json()
         try:
+            req_data = req.json()
             product_price = int(req_data['products'][0]['sizes'][0]['price']['product'])/100 * 0.93
             #print(product_price)
         except:

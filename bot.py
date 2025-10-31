@@ -7,6 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 import logging
 import re
+from database import Database
 
 # Настройка логирования
 logging.basicConfig(
@@ -14,8 +15,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
-# BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
+#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 
 HEADERS_FIRST = {
     "authority": "u-card.wb.ru",
@@ -38,322 +39,20 @@ HEADERS_FIRST = {
 HEADERS_SECOND = HEADERS_FIRST.copy()
 HEADERS_SECOND.pop("authorization", None)
 
-class Database:
-    def __init__(self):
-        self.conn = sqlite3.connect('price_monitor.db', check_same_thread=False)
-        self.create_tables()
-    
-    def create_tables(self):
-        cursor = self.conn.cursor()
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_settings (
-                user_id INTEGER PRIMARY KEY,
-                ps5_price INTEGER DEFAULT 0,
-                iphone_price INTEGER DEFAULT 0,
-                discount_percent INTEGER DEFAULT 7,
-                price_threshold INTEGER DEFAULT 50,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS product_notifications (
-                user_id INTEGER,
-                product_id INTEGER,
-                current_price INTEGER,  
-                discount_percent INTEGER DEFAULT 7,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, product_id),
-                FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS temp_data (
-                user_id INTEGER PRIMARY KEY,
-                waiting_for_price INTEGER DEFAULT 0,
-                product_type TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # cursor.execute('''
-        #     CREATE INDEX IF NOT EXISTS idx_product_notifications_user_product 
-        #     ON product_notifications (user_id, product_id, sent_at DESC)
-        # ''')
-        
-        # cursor.execute('''
-        #     CREATE INDEX IF NOT EXISTS idx_product_notifications_sent_at 
-        #     ON product_notifications (sent_at)
-        # ''')
-        
-        self.conn.commit()
-    
-    def get_user_settings(self, user_id):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT ps5_price, iphone_price, discount_percent, price_threshold FROM user_settings WHERE user_id = ?', (user_id,))
-        result = cursor.fetchone()
-        return result if result else (0, 0, 7, 50)
-    
-    def set_user_price(self, user_id, product_type, price):
-        cursor = self.conn.cursor()
-        
-        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
-        if cursor.fetchone():
-            if product_type == 'ps5':
-                cursor.execute('UPDATE user_settings SET ps5_price = ? WHERE user_id = ?', (price, user_id))
-            else:
-                cursor.execute('UPDATE user_settings SET iphone_price = ? WHERE user_id = ?', (price, user_id))
-        else:
-            if product_type == 'ps5':
-                cursor.execute('INSERT INTO user_settings (user_id, ps5_price, discount_percent, price_threshold) VALUES (?, ?, ?, ?)', 
-                              (user_id, price, 7, 50))
-            else:
-                cursor.execute('INSERT INTO user_settings (user_id, iphone_price, discount_percent, price_threshold) VALUES (?, ?, ?, ?)', 
-                              (user_id, price, 7, 50))
-        
-        self.conn.commit()
-    
-    def set_user_threshold(self, user_id, threshold):
-        """Установка общего автоматического порога для пользователя"""
-        cursor = self.conn.cursor()
-        
-        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
-        if cursor.fetchone():
-            cursor.execute('UPDATE user_settings SET price_threshold = ? WHERE user_id = ?', (threshold, user_id))
-        else:
-            cursor.execute('INSERT INTO user_settings (user_id, price_threshold, discount_percent) VALUES (?, ?, ?)', 
-                          (user_id, threshold, 7))
-        
-        self.conn.commit()
-    
-    def set_user_discount(self, user_id, discount_percent):
-        """Установка процента скидки для пользователя с обновлением истории уведомлений"""
-        cursor = self.conn.cursor()
-        
-        # Получаем старую скидку
-        old_discount = 7  # значение по умолчанию
-        cursor.execute('SELECT discount_percent FROM user_settings WHERE user_id = ?', (user_id,))
-        result = cursor.fetchone()
-        if result:
-            old_discount = result[0]
-        
-        # Обновляем настройки пользователя
-        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
-        if cursor.fetchone():
-            cursor.execute('UPDATE user_settings SET discount_percent = ? WHERE user_id = ?', 
-                          (discount_percent, user_id))
-        else:
-            cursor.execute('INSERT INTO user_settings (user_id, discount_percent) VALUES (?, ?)', 
-                          (user_id, discount_percent))
-        
-        self.conn.commit()
-        
-        # Если скидка изменилась, обновляем историю уведомлений
-        if old_discount != discount_percent:
-            self.update_discount_in_notifications(user_id, discount_percent)
-    
-    def get_all_users(self):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT user_id, ps5_price, iphone_price, discount_percent, price_threshold FROM user_settings')
-        return cursor.fetchall()
-    
-    def set_waiting_for_price(self, user_id, waiting_for_price, product_type=None):
-        cursor = self.conn.cursor()
-        
-        cursor.execute('SELECT * FROM temp_data WHERE user_id = ?', (user_id,))
-        if cursor.fetchone():
-            cursor.execute('UPDATE temp_data SET waiting_for_price = ?, product_type = ? WHERE user_id = ?', 
-                          (waiting_for_price, product_type, user_id))
-        else:
-            cursor.execute('INSERT INTO temp_data (user_id, waiting_for_price, product_type) VALUES (?, ?, ?)', 
-                          (user_id, waiting_for_price, product_type))
-        
-        self.conn.commit()
-    
-    def get_waiting_for_price(self, user_id):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT waiting_for_price, product_type FROM temp_data WHERE user_id = ?', (user_id,))
-        result = cursor.fetchone()
-        return result if result else (0, None)
-    
-    def clear_waiting_for_price(self, user_id):
-        cursor = self.conn.cursor()
-        cursor.execute('DELETE FROM temp_data WHERE user_id = ?', (user_id,))
-        self.conn.commit()
-    
-    def is_product_sent_recently(self, user_id, product_id, hours=24):
-        """Проверяем, отправлялось ли уведомление за последние hours часов"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT 1 FROM product_notifications 
-            WHERE user_id = ? AND product_id = ? AND last_updated > datetime('now', ?)
-        ''', (user_id, product_id, f'-{hours} hours'))
-        return cursor.fetchone() is not None
-    
-    def save_notification(self, user_id, product_id, current_price, discount_percent):
-      """
-      Сохраняем/обновляем уведомление только если нужно отправлять
-      Возвращает: (should_send, previous_price, price_dropped)
-      """
-      current_price_int = math.floor(current_price)
-      
-      cursor = self.conn.cursor()
-      
-      # Ищем существующую запись
-      cursor.execute('''
-          SELECT current_price 
-          FROM product_notifications 
-          WHERE user_id = ? AND product_id = ?
-      ''', (user_id, product_id))
-      result = cursor.fetchone()
-      
-      if result:
-          # Запись существует
-          existing_price = result[0]
-          price_dropped = current_price_int < existing_price
-          
-          if price_dropped:
-              # Цена упала - обновляем запись
-              cursor.execute('''
-                  UPDATE product_notifications 
-                  SET current_price = ?, 
-                      discount_percent = ?,
-                      last_updated = CURRENT_TIMESTAMP
-                  WHERE user_id = ? AND product_id = ?
-              ''', (current_price_int, discount_percent, user_id, product_id))
-              
-              self.conn.commit()
-              print(f"📉 Цена обновлена для товара {product_id}: {existing_price} → {current_price_int}")
-              return True, existing_price, True   
-          else:
-              return False, existing_price, False
-              
-      else:
-          # Новая запись - товар увидели впервые
-          cursor.execute('''
-              INSERT INTO product_notifications 
-              (user_id, product_id, current_price, discount_percent)
-              VALUES (?, ?, ?, ?)
-          ''', (user_id, product_id, current_price_int, discount_percent))
-          
-          self.conn.commit()
-          print(f"🆕 Новый товар {product_id} добавлен, цена: {current_price_int}")
-          return True, None, False
-    
-    def get_previous_price(self, user_id, product_id):
-      """Получаем предыдущую цену товара (теперь это просто current_price из БД)"""
-      cursor = self.conn.cursor()
-      cursor.execute('''
-          SELECT current_price FROM product_notifications 
-          WHERE user_id = ? AND product_id = ?
-      ''', (user_id, product_id))
-      result = cursor.fetchone()
-      return result[0] if result else None
-    
-    def get_price_history(self, user_id, product_id, limit=10):
-        """Получаем историю цен для товара (для аналитики)"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT price, last_updated, discount_percent, price_changed, previous_price
-            FROM product_notifications 
-            WHERE user_id = ? AND product_id = ? 
-            ORDER BY last_updated DESC 
-            LIMIT ?
-        ''', (user_id, product_id, limit))
-        return cursor.fetchall()
-    
-    def cleanup_old_records(self, hours=24):
-      """Очистка записей старше указанного количества часов"""
-      cursor = self.conn.cursor()
-      
-      # Удаляем старые уведомления
-      cursor.execute('DELETE FROM product_notifications WHERE last_updated < datetime("now", ?)', 
-                    (f"-{hours} hours",))
-      notifications_deleted = cursor.rowcount
-      
-      cursor.execute('DELETE FROM temp_data WHERE created_at < datetime("now", ?)', 
-                    ("-1 hours",))
-      temp_deleted = cursor.rowcount
-      
-      self.conn.commit()
-      return notifications_deleted + temp_deleted
-    
-    def update_discount_in_notifications(self, user_id, new_discount_percent):
-      """Обновляет процент скидки во всех уведомлениях пользователя"""
-      cursor = self.conn.cursor()
-      
-      try:
-          cursor.execute('''
-              UPDATE product_notifications 
-              SET discount_percent = ?
-              WHERE user_id = ?
-          ''', (new_discount_percent, user_id))
-          
-          updated_count = cursor.rowcount
-          self.conn.commit()
-          
-          print(f"✅ Обновлены скидки для {updated_count} товаров пользователя {user_id}")
-          return True
-          
-      except Exception as e:
-          print(f"❌ Ошибка при обновлении скидки в уведомлениях: {e}")
-          self.conn.rollback()
-          return False
-    
-    def is_user_waiting_for_input(self, user_id):
-        """Проверяет, ожидает ли пользователь ввода (установка цены, порога или скидки)"""
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT waiting_for_price FROM temp_data WHERE user_id = ?', (user_id,))
-        result = cursor.fetchone()
-        return result is not None and result[0] == 1
-
 # Инициализация базы данных
 db = Database()
 
-# Списки для исключения
-iphone_exclude_keywords = [
-    "15", "14", "13", "11", "iphone 15", "iphone 14", "iphone 13", "iphone 12", "iphone 11", 
-    "iphone xr", "iphone xs", "iphone x", "iphone 8", "iphone 7", "iphone 6",
-    "16e", "16 e", "16е", "16 е", "16plus", "16 plus", "asis", "iphone 16e", "iphone 16е",
-    "восстановленный", "ремоторизованный", "refurbished", "б/у", "used",
-    "восстановлен", "отремонтированный"
-]
-
-ps5_exclude_keywords = [
-    "digital", "digital edition", "digital version",
-    "без дисковода", "без привода", "бездисковый", "бездисковая",
-    "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии", "4", "4 slim"
-]
-
-def should_exclude_product(name, product_type):
-    name_lower = name.lower()
-    exclude_keywords = ps5_exclude_keywords if product_type == "ps5" else iphone_exclude_keywords
-    
-    for keyword in exclude_keywords:
-        if keyword in name_lower:
-            return True
-    return False
-
-async def get_products_by_sort(session, product_type):
-    """Асинхронно получаем список товаров"""
+async def get_products_by_config(session, config):
+    """Универсальная функция для получения товаров по конфигу из БД"""
     products = []
     product_ids = set()
     
-    search_queries = []
-    if product_type == "ps5":
-        search_queries = [
-            "playstation 5 slim",
-        ]
-    else:
-        search_queries = [
-            "iPhone 16", "iPhone 16 128gb", "iPhone 16 sim + esim", "iPhone 16 dual sim",
-        ]
+    search_queries = config['search_queries']
+    exclude_keywords = config['exclude_keywords']
     
     for search_query in search_queries:
-        empty_page_count = 0  # Счетчик пустых страниц подряд
-        max_empty_pages = 2   # Максимальное количество пустых страниц перед остановкой
+        empty_page_count = 0
+        max_empty_pages = 2
         count_not_find_products = 0
         max_count_not_find_products = 2
         
@@ -366,7 +65,6 @@ async def get_products_by_sort(session, product_type):
                 async with session.get(url, headers=HEADERS_FIRST, timeout=10) as response:
                     response_text = await response.text()
                     
-                    # Проверка на пустой ответ
                     if not response_text.strip():
                         print(f"⚠️ Получена пустая страница для {search_query}, страница {page}")
                         empty_page_count += 1
@@ -385,7 +83,6 @@ async def get_products_by_sort(session, product_type):
                             break
                         continue
                 
-                # Сбрасываем счетчик пустых страниц при успешном получении данных
                 empty_page_count = 0
                 
                 if max_count_not_find_products == count_not_find_products:
@@ -400,7 +97,6 @@ async def get_products_by_sort(session, product_type):
                 count_not_find_products = 0
                 if not data["products"]:
                     print(f"ℹ️ Нет товаров на странице {page} для запроса: {search_query}")
-                    # Если страница без товаров, завершаем пагинацию для этого запроса
                     break
                 
                 products_before = len(products)
@@ -412,12 +108,10 @@ async def get_products_by_sort(session, product_type):
                 products_added = len(products) - products_before
                 print(f"✅ Найдено {len(data['products'])} товаров, добавлено {products_added} новых для '{search_query}'")
                 
-                # Если не добавилось ни одного нового товара, завершаем пагинацию
                 if products_added == 0:
                     print(f"🛑 Не добавлено новых товаров на странице {page}, завершаем пагинацию для '{search_query}'")
                     break
                 
-                # Если товаров меньше, чем ожидалось, завершаем пагинацию
                 if len(data["products"]) < 100:
                     print(f"ℹ️ Меньше 100 товаров на странице {page}, завершаем пагинацию для '{search_query}'")
                     break
@@ -429,47 +123,45 @@ async def get_products_by_sort(session, product_type):
                     print(f"🛑 Получено {empty_page_count} таймаутов подряд, завершаем цикл для '{search_query}'")
                     break
             except Exception as e:
-                print(f"❌ Ошибка при парсинге {product_type}: {e}")
+                print(f"❌ Ошибка при парсинге {search_query}: {e}")
                 empty_page_count += 1
                 if empty_page_count >= max_empty_pages:
                     print(f"🛑 Получено {empty_page_count} ошибок подряд, завершаем цикл для '{search_query}'")
                     break
     
+    print(f"📦 Всего найдено {len(products)} товаров для конфига")
     return products
 
-async def get_detailed_product_price(session, product_id, product_type, discount_percent=7):
-    """Асинхронно получаем детальную цену товара с учетом скидки пользователя"""
+def should_exclude_by_config(name_lower, exclude_keywords):
+    """Проверяет исключения по конфигу из БД"""
+    for keyword in exclude_keywords:
+        if keyword in name_lower:
+            return True
+    return False
+
+async def get_detailed_product_price(session, product_id, discount_percent=7):
+    """Универсальная функция получения детальной цены товара"""
     try:
         discount_multiplier = (100 - discount_percent) / 100
         
-        if product_type == "ps5":
-            url = f"https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm={product_id}&ignore_stocks=true"
-            async with session.get(url, headers=HEADERS_SECOND, timeout=5) as response:
-                response_text = await response.text()
-                try:
-                    req_data = json.loads(response_text)
-                except json.JSONDecodeError:
-                    return None
-            
-            if 'products' in req_data and len(req_data['products']) > 0:
-                base_price = math.floor(req_data['products'][0]['sizes'][0]['price']['product'])/100
-                discounted_price = base_price * discount_multiplier
-                return math.floor(discounted_price)
-            return None
-        else:
-            url = f"https://card.wb.ru/cards/v2/detail?appType=1&curr=rub&dest=-1257786&spp=30&nm={product_id}"
-            async with session.get(url, timeout=5) as response:
-                response_text = await response.text()
-                try:
-                    req_data = json.loads(response_text)
-                except json.JSONDecodeError:
-                    return None
-            
-            if 'data' in req_data and 'products' in req_data['data'] and len(req_data['data']['products']) > 0:
-                base_price = math.floor(req_data['data']['products'][0]['sizes'][0]['price']['product'])/100
-                discounted_price = base_price * discount_multiplier
-                return math.floor(discounted_price)
-            return None
+        # Используем один URL для всех товаров
+        url = f"https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm={product_id}&ignore_stocks=true"
+        
+        async with session.get(url, headers=HEADERS_SECOND, timeout=5) as response:
+            response_text = await response.text()
+            try:
+                req_data = json.loads(response_text)
+            except json.JSONDecodeError:
+                return None
+        
+        # Универсальная обработка ответа
+        if 'products' in req_data and len(req_data['products']) > 0:
+            base_price = math.floor(req_data['products'][0]['sizes'][0]['price']['product'])/100
+            discounted_price = base_price * discount_multiplier
+            return math.floor(discounted_price)
+        
+        return None
+        
     except Exception as e:
         print(f"❌ Ошибка при получении детальной цены для {product_id}: {e}")
         return None
@@ -523,103 +215,81 @@ async def send_product_messages(application, user_id, products, title, max_produ
     
     print(f"✅ Отправлено {len(product_chunks)} сообщений пользователю {user_id} о {len(products)} товарах")
 
-async def filter_products_for_user(application, user_id, user_ps5_price, user_iphone_price, discount_percent, price_threshold, all_ps5_products, all_iphone_products, session):
-    """Фильтруем товары для конкретного пользователя"""
+
+async def filter_products_for_user(application, user_id, product_type, max_price, 
+                                 discount_percent, price_threshold, products, session):
+    """Универсальная фильтрация товаров для пользователя по конкретному типу продукта"""
     
     if db.is_user_waiting_for_input(user_id):
         print(f"⏸️ Пользователь {user_id} ожидает ввода, пропускаем проверку цен")
         return
     
-    found_ps5_products = []
-    found_iphone_products = []
+    found_products = []
     
-    if user_ps5_price > 0:
-        ps5_min_price = math.floor(user_ps5_price * (price_threshold / 100))
-        print(f"🔍 Фильтрация PS5 для пользователя {user_id}, цена: {user_ps5_price}, порог: {price_threshold}% (мин. {ps5_min_price} руб.)")
+    min_price = math.floor(max_price * (price_threshold / 100))
+    print(f"🔍 Фильтрация {product_type} для пользователя {user_id}, цена: {max_price}, порог: {price_threshold}% (мин. {min_price} руб.)")
+    
+    # Получаем конфиг для этого типа продукта
+    config = db.get_search_config(product_type)
+    if not config:
+        print(f"❌ Конфиг для {product_type} не найден")
+        return
+    
+    exclude_keywords = config['exclude_keywords']
+    
+    for product in products:
+        name = str(product["name"])
+        base_price = math.floor(product['sizes'][0]['price']['product'])/100
+        initial_discounted_price = base_price * ((100 - discount_percent) / 100)
         
-        for product in all_ps5_products:
-            name = str(product["name"])
-            base_price = math.floor(product['sizes'][0]['price']['product'])/100
-            initial_discounted_price = base_price * ((100 - discount_percent) / 100)
-            
-            if should_exclude_product(name.lower(), "ps5"):
-                continue
-            
-            if initial_discounted_price < user_ps5_price + 2000 and initial_discounted_price > ps5_min_price:
-                detailed_price = await get_detailed_product_price(session, product['id'], 'ps5', discount_percent)
-                if detailed_price and detailed_price < user_ps5_price and detailed_price > user_ps5_price/2:
-                    
-                    should_send, previous_price, price_dropped = db.save_notification(
-                        user_id, product['id'], detailed_price, discount_percent
-                    )
-                    
-                    if should_send:
-                        print(f"✅ Найден подходящий PS5: {name} за {detailed_price} руб. "
-                              f"({'цена упала' if price_dropped else 'новый товар'})")
-                        
-                        found_ps5_products.append({
-                            'id': product['id'],
-                            'name': name,
-                            'price': detailed_price,
-                            'previous_price': previous_price,
-                            'price_dropped': price_dropped,
-                            'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx"
-                        })
-    
-    if user_iphone_price > 0:
-        iphone_min_price = math.floor(user_iphone_price * (price_threshold / 100))
-        print(f"🔍 Фильтрация iPhone для пользователя {user_id}, цена: {user_iphone_price}, порог: {price_threshold}% (мин. {iphone_min_price} руб.)")
+        # Проверяем исключения по конфигу из БД
+        if should_exclude_by_config(name.lower(), exclude_keywords):
+            continue
         
-        for product in all_iphone_products:
-            name = str(product["name"])
-            base_price = math.floor(product['sizes'][0]['price']['product'])/100
-            initial_discounted_price = base_price * ((100 - discount_percent) / 100)
+        if initial_discounted_price < max_price and initial_discounted_price > min_price:
+            # Определяем категорию для запроса детальной цены
+            detailed_price = await get_detailed_product_price(session, product['id'], discount_percent)
             
-            if should_exclude_product(name.lower(), "iphone"):
-                continue
-            
-            if initial_discounted_price < user_iphone_price and initial_discounted_price > iphone_min_price:
-                detailed_price = await get_detailed_product_price(session, product['id'], 'iphone', discount_percent)
-                if detailed_price and detailed_price < user_iphone_price and detailed_price > user_iphone_price/2:
+            if detailed_price and detailed_price < max_price and detailed_price > max_price/2:
+                
+                should_send, previous_price, price_dropped = db.save_notification(
+                    user_id, product['id'], detailed_price, discount_percent
+                )
+                
+                if should_send:
+                    print(f"✅ Найден подходящий {product_type}: {name} за {detailed_price} руб. "
+                          f"({'цена упала' if price_dropped else 'новый товар'})")
                     
-                    should_send, previous_price, price_dropped = db.save_notification(
-                        user_id, product['id'], detailed_price, discount_percent
-                    )
-                    
-                    if should_send:
-                        print(f"✅ Найден подходящий iPhone: {name} за {detailed_price} руб. "
-                              f"({'цена упала' if price_dropped else 'новый товар'})")
-                        
-                        found_iphone_products.append({
-                            'id': product['id'],
-                            'name': name,
-                            'price': detailed_price,
-                            'previous_price': previous_price,
-                            'price_dropped': price_dropped,
-                            'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx"
-                        })
+                    found_products.append({
+                        'id': product['id'],
+                        'name': name,
+                        'price': detailed_price,
+                        'previous_price': previous_price,
+                        'price_dropped': price_dropped,
+                        'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx"
+                    })
     
-    # Отправка сообщений с разбивкой по 15 товаров
-    if found_ps5_products:
+    # Отправка сообщений
+    if found_products:
+        product_name = config['product_name']
+        # Определяем иконку по типу продукта
+        if 'iphone' in product_type:
+            title = f"📱 Найдены {product_name} по выгодным ценам:"
+        elif 'ps5' in product_type:
+            title = f"🎮 Найдены {product_name} по выгодным ценам:"
+        else:
+            title = f"🛍️ Найдены {product_name} по выгодным ценам:"
+        
         await send_product_messages(
             application, 
             user_id, 
-            found_ps5_products, 
-            "🎮 Найдены PS5 по выгодным ценам:",
+            found_products, 
+            title,
             max_products_per_message=15
         )
 
-    if found_iphone_products:
-        await send_product_messages(
-            application, 
-            user_id, 
-            found_iphone_products, 
-            "📱 Найдены iPhone 16 по выгодным ценам:",
-            max_products_per_message=15
-        )
-        
 async def check_all_prices(application):
-    """Асинхронная проверка цен для всех пользователей"""
+    """Оптимизированная проверка цен для всех пользователей с учетом статуса поиска"""
     try:
         deleted = db.cleanup_old_records(hours=24)
         if deleted > 0:
@@ -629,40 +299,74 @@ async def check_all_prices(application):
         async with aiohttp.ClientSession(connector=connector) as session:
             print("🔄 Начинаем сбор товаров...")
             
-            all_ps5_products, all_iphone_products = await asyncio.gather(
-                get_products_by_sort(session, "ps5"),
-                get_products_by_sort(session, "iphone"),
-                return_exceptions=True
-            )
+            # 1. Получаем ВСЕ активные конфиги
+            all_configs = db.get_all_search_configs()
+            print(f"📋 Всего конфигов для поиска: {len(all_configs)}")
             
-            if isinstance(all_ps5_products, Exception):
-                print(f"❌ Ошибка при парсинге PS5: {all_ps5_products}")
-                all_ps5_products = []
-            if isinstance(all_iphone_products, Exception):
-                print(f"❌ Ошибка при парсинге iPhone: {all_iphone_products}")
-                all_iphone_products = []
+            # 2. Получаем только пользователей с активным поиском
+            active_users = db.get_users_with_active_search()
+            print(f"👥 Пользователей с активным поиском: {len(active_users)}")
             
-            print(f"📦 Найдено {len(all_ps5_products)} PS5 и {len(all_iphone_products)} iPhone")
+            if not active_users:
+                print("ℹ️ Нет пользователей с активным поиском, завершаем проверку")
+                return
             
-            users = db.get_all_users()
-            print(f"👥 Обрабатываем {len(users)} пользователей")
+            # 3. Извлекаем отслеживаемые типы товаров для активных пользователей
+            all_tracked_product_types = set()
+            users_with_prices = {}
             
-            for user_id, ps5_price, iphone_price, discount_percent, price_threshold in users:
+            for user_id in active_users:
+                user_products = db.get_all_user_product_prices(user_id)
+                user_prices = {product_type: data['price'] for product_type, data in user_products.items() if data['active']}
+                if user_prices:
+                    discount_percent, price_threshold = db.get_user_settings(user_id)
+                    users_with_prices[user_id] = {
+                        'prices': user_prices,
+                        'discount': discount_percent,
+                        'threshold': price_threshold
+                    }
+                    all_tracked_product_types.update(user_prices.keys())
+            
+            print(f"📦 Отслеживаемых типов товаров: {len(all_tracked_product_types)}")
+            
+            # 4. Собираем товары ТОЛЬКО для отслеживаемых типов
+            all_products = {}
+            for product_type in all_tracked_product_types:
+                if product_type in all_configs:
+                    config = all_configs[product_type]
+                    print(f"🔍 Сбор товаров для {product_type}...")
+                    products = await get_products_by_config(session, config)
+                    all_products[product_type] = products
+                    print(f"✅ Найдено {len(products)} товаров для {product_type}")
+                else:
+                    print(f"⚠️ Конфиг для {product_type} не найден в БД")
+            
+            # 5. Фильтруем товары для каждого активного пользователя
+            print(f"🔍 Проверка цен для {len(users_with_prices)} пользователей...")
+            
+            for user_id, user_data in users_with_prices.items():
                 # Проверяем, не ожидает ли пользователь ввода
                 if db.is_user_waiting_for_input(user_id):
                     print(f"⏸️ Пропускаем пользователя {user_id} - ожидает ввода")
                     continue
-                    
-                if ps5_price > 0 or iphone_price > 0:
-                    await filter_products_for_user(
-                        application, user_id, ps5_price, iphone_price, discount_percent, price_threshold,
-                        all_ps5_products, all_iphone_products, session
-                    )
+                
+                print(f"🔍 Проверка пользователя {user_id}, отслеживает {len(user_data['prices'])} товаров")
+                
+                # Для каждого отслеживаемого продукта пользователя
+                for product_type, max_price in user_data['prices'].items():
+                    if max_price > 0 and product_type in all_products:
+                        await filter_products_for_user(
+                            application, user_id, product_type, max_price, 
+                            user_data['discount'], user_data['threshold'],
+                            all_products[product_type], session
+                        )
             
             print("✅ Проверка цен завершена")
         
     except Exception as e:
         print(f"❌ Ошибка при проверке цен: {e}")
+        import traceback
+        traceback.print_exc()
 
 is_price_check_running = False
 
@@ -683,20 +387,20 @@ async def price_checker_job(context):
         is_price_check_running = False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start - показывает описание бота и основные кнопки"""
-    user_id = update.effective_user.id
-    ps5_price, iphone_price, discount_percent, price_threshold = db.get_user_settings(user_id)
+    """Команда /start - показывает описание бота"""
     
     message = (
         "🤖 **Бот мониторинга цен на Wildberries**\n\n"
         "**Что умеет этот бот:**\n"
         "• Автоматически ищет PS5 и iPhone 16 по вашим ценам\n"
         "• Применяет скидку WB при расчете стоимости\n"
-        "• Отслеживает снижение цен\n\n"
-        "💡 **Как пользоваться:**\n"
-        '1. Нажмите «🤖 **Парсер**» - чтобы настроить цены для поиска\n'
-        '2. Нажмите «⚙️ **Настройки**» - чтобы изменить скидку и пороги\n'
-        "3. Ждите уведомлений о найденных товарах!\n\n"
+        "• Отслеживает снижение цен\n"
+        "• **Управление поиском** - вы сами решаете, когда получать уведомления\n\n"
+        "💡 **Как начать:**\n"
+        '1. Нажмите «⚙️ Меню» - чтобы настроить бота\n'
+        '2. Добавьте товары и установите цены\n'
+        '3. Включите поиск и ждите уведомлений!\n\n'
+        "🔕 *Поиск отключен по умолчанию. Включите его когда будете готовы.*"
     )
     
     try:
@@ -705,28 +409,58 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown',
             reply_markup=get_main_reply_keyboard()
         )
-        # Отправляем кнопки для навигации
     except Exception as e:
         print(f"❌ Ошибка при отправке сообщения: {e}")
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню"""
     user_id = update.effective_user.id
-    ps5_price, iphone_price, discount_percent, price_threshold = db.get_user_settings(user_id)
+    discount_percent, price_threshold = db.get_user_settings(user_id)
+    
+    # Получаем ВСЕ товары пользователя (включая неактивные)
+    user_products = db.get_all_user_product_prices(user_id)
+    
+    # Получаем статус поиска
+    is_search_active = db.get_user_search_active(user_id)
+    search_status_icon = "🟢" if is_search_active else "🔴"
+    search_status_text = "активен" if is_search_active else "остановлен"
+    
+    # Формируем информацию о установленных ценах
+    price_info = []
+    if user_products:
+        product_names = {
+            'iphone_16_128': 'iPhone 16 128Gb',
+            'iphone_16_256': 'iPhone 16 256Gb',
+            'iphone_16_pro_128': 'iPhone 16 Pro 128Gb',
+            'iphone_16_pro_256': 'iPhone 16 Pro 256Gb',
+            'iphone_16_pro_max': 'iPhone 16 Pro Max 256Gb',
+            'ps5_slim_disk': 'PlayStation 5 Slim'
+        }
+        
+        for product_type, product_data in user_products.items():
+            price = product_data['price']
+            if price > 0:
+                product_name = product_names.get(product_type, product_type)
+                # Убрали иконки статуса и эмодзи товаров, оставили только название и цену
+                price_info.append(f"{product_name}: {price:,} руб.".replace(',', ' '))
+    
+    if not price_info:
+        price_info = ["Не установлены"]
     
     keyboard = [
-        [InlineKeyboardButton("🎮 Установить цену PS5", callback_data="set_ps5_price")],
-        [InlineKeyboardButton("📱 Установить цену iPhone 16", callback_data="set_iphone_price")],
+        [InlineKeyboardButton("🤖 Парсер", callback_data="parser_menu")],
+        [InlineKeyboardButton("⚙️ Настройки", callback_data="settings_menu")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     message = (
-        "**Главное меню**\n\n"
+        f"{search_status_icon} **Статус поиска:** {search_status_text}\n\n"
         "⚙️ **Ваши текущие настройки:**\n"
-        f"🎮 PS5: {ps5_price if ps5_price > 0 else 'Не установлена'} руб.\n"
-        f"📱 iPhone 16: {iphone_price if iphone_price > 0 else 'Не установлена'} руб.\n"
-        f"💸 Скидка WB: {discount_percent}%\n\n"
-        "💡 **Выберите действие:**"
+        f"💸 Скидка WB: {discount_percent}%\n"
+        f"📉 Авт. порог: {price_threshold}%\n\n"
+        "📦 **Отслеживаемые товары:**\n" +
+        "\n".join(f"• {info}" for info in price_info) +
+        "\n\n💡 **Выберите раздел:**"
     )
     
     if update.callback_query:
@@ -734,23 +468,10 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик для кнопки Меню под клавиатурой"""
-    await show_main_menu(update, context)
-
-# Создаем Reply клавиатуру (постоянная клавиатура внизу)
-def get_main_reply_keyboard():
-    """Создает основную Reply клавиатуру"""
-    keyboard = [
-        [KeyboardButton("🤖 Парсер")],
-        [KeyboardButton("⚙️ Настройки")]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню настроек"""
     user_id = update.effective_user.id
-    ps5_price, iphone_price, discount_percent, price_threshold = db.get_user_settings(user_id)
+    discount_percent, price_threshold = db.get_user_settings(user_id)
     
     keyboard = [
         [InlineKeyboardButton("💸 Установить скидку", callback_data="set_discount")],
@@ -771,15 +492,204 @@ async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Если это текстовое сообщение, отправляем новое
         await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
+async def show_parser_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню парсера с кнопками управления поиском"""
+    user_id = update.effective_user.id
+    
+    # Проверяем статус поиска из БД
+    is_search_active = db.get_user_search_active(user_id)
+    
+    keyboard = []
+    
+    if is_search_active:
+        keyboard.append([InlineKeyboardButton("⏹️ Остановить поиск", callback_data="stop_search")])
+    else:
+        keyboard.append([InlineKeyboardButton("🔍 Начать поиск", callback_data="start_search")])
+    
+    keyboard.extend([
+        [InlineKeyboardButton("🤖 Парсер", callback_data="products_menu")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")]
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    status_text = "🟢 Активен" if is_search_active else "🔴 Остановлен"
+    
+    message = (
+        "🤖 **Меню парсера**\n\n"
+        f"**Статус поиска:** {status_text}\n\n"
+        "**Управление поиском:**\n"
+        "• **🔍 Начать поиск** - запустить автоматический поиск товаров\n"
+        "• **⏹️ Остановить поиск** - приостановить уведомления\n"
+        "• **🤖 Парсер** - настроить цены для отслеживания\n\n"
+        "💡 *Поиск работает в фоновом режиме и проверяет цены каждую минуту*"
+    )
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    else:
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def show_products_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню выбора категорий товаров"""
+    keyboard = [
+        [InlineKeyboardButton("📱 iPhone 16", callback_data="iphone_menu")],
+        [InlineKeyboardButton("🎮 PlayStation", callback_data="ps5_menu")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_parser")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = (
+        "📦 **Выбор категории товаров**\n\n"
+        "Выберите категорию для настройки цен:"
+    )
+    
+    await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def show_iphone_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню выбора моделей iPhone"""
+    keyboard = [
+        [InlineKeyboardButton("iPhone 16 128Gb", callback_data="set_iphone_16_128")],
+        [InlineKeyboardButton("iPhone 16 256Gb", callback_data="set_iphone_16_256")],
+        [InlineKeyboardButton("iPhone 16 Pro 128Gb", callback_data="set_iphone_16_pro_128")],
+        [InlineKeyboardButton("iPhone 16 Pro 256Gb", callback_data="set_iphone_16_pro_256")],
+        [InlineKeyboardButton("iPhone 16 Pro Max 256Gb", callback_data="set_iphone_16_pro_max")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_products")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = (
+        "📱 **Выбор модели iPhone**\n\n"
+        "Выберите конкретную модель для установки цены:"
+    )
+    
+    await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def show_ps5_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню для PS5"""
+    keyboard = [
+        [InlineKeyboardButton("PlayStation 5 Slim с дисководом", callback_data="set_ps5_slim_disk")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_products")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = (
+        "🎮 **PlayStation 5**\n\n"
+        "Установите цену для PlayStation 5 Slim с дисководом:"
+    )
+    
+    await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик для кнопки Меню под клавиатурой"""
+    await show_main_menu(update, context)
+
+# Создаем Reply клавиатуру (постоянная клавиатура внизу)
+def get_main_reply_keyboard():
+    """Создает основную Reply клавиатуру"""
+    keyboard = [
+        [KeyboardButton("⚙️ Меню")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает главное меню с информацией и управлением"""
+    user_id = update.effective_user.id
+    discount_percent, price_threshold = db.get_user_settings(user_id)
+    
+    # Получаем ВСЕ товары пользователя
+    user_products = db.get_all_user_product_prices(user_id)
+    
+    # Получаем статус поиска
+    is_search_active = db.get_user_search_active(user_id)
+    search_status_icon = "🟢" if is_search_active else "🔴"
+    search_status_text = "активен" if is_search_active else "остановлен"
+    
+    # Формируем информацию о установленных ценах
+    price_info = []
+    if user_products:
+        product_names = {
+            'iphone_16_128': 'iPhone 16 128Gb',
+            'iphone_16_256': 'iPhone 16 256Gb',
+            'iphone_16_pro_128': 'iPhone 16 Pro 128Gb',
+            'iphone_16_pro_256': 'iPhone 16 Pro 256Gb',
+            'iphone_16_pro_max': 'iPhone 16 Pro Max 256Gb',
+            'ps5_slim_disk': 'PlayStation 5 Slim'
+        }
+        
+        for product_type, product_data in user_products.items():
+          price = product_data['price']
+          is_active = product_data['active']
+          if price > 0:
+              product_name = product_names.get(product_type, product_type)
+              # Убираем status_icon и оставляем только название и цену
+              price_info.append(f"• {product_name}: {price:,} руб.".replace(',', ' '))
+    
+    if not price_info:
+        price_info = ["Не установлены"]
+    
+    # Создаем клавиатуру меню
+    keyboard = []
+    
+    # Динамическая кнопка поиска (в зависимости от статуса)
+    if is_search_active:
+        keyboard.append([InlineKeyboardButton("⏹️ Остановить поиск", callback_data="stop_search")])
+    else:
+        keyboard.append([InlineKeyboardButton("🔍 Начать поиск", callback_data="start_search")])
+    
+    # Остальные кнопки
+    keyboard.extend([
+        [InlineKeyboardButton("🤖 Парсер", callback_data="products_menu")],
+        [InlineKeyboardButton("⚙️ Настройки", callback_data="settings_menu")],
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = (
+        f"{search_status_icon} **Статус поиска:** {search_status_text}\n\n"
+        "**Текущие настройки:**\n"
+        f"• 💸 Скидка WB: {discount_percent}%\n"
+        f"• 📉 Автоматический порог: {price_threshold}%\n\n"
+        "**📦 Отслеживаемые товары:**\n" +
+        "\n".join(f"{info}" for info in price_info) +
+        "\n\n💡 *Выберите действие:*"
+    )
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    else:
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+
 async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на Reply кнопки"""
     text = update.message.text
+    user_id = update.effective_user.id
     
-    if text == "🤖 Парсер":
-        await show_main_menu(update, context)
+    if text == "⚙️ Меню":
+        # Показываем главное меню
+        await show_menu(update, context)
+
+async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню настроек"""
+    user_id = update.effective_user.id
+    discount_percent, price_threshold = db.get_user_settings(user_id)
     
-    elif text == "⚙️ Настройки":
-        await show_settings_menu(update, context)
+    keyboard = [
+        [InlineKeyboardButton("💸 Настроить скидку", callback_data="set_discount")],
+        [InlineKeyboardButton("📉 Настроить порог", callback_data="set_threshold")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = (
+        "**⚙️ Настройки**\n\n"
+        "**Текущие значения:**\n"
+        f"• 💸 Скидка WB: {discount_percent}%\n"
+        f"• 📉 Автоматический порог: {price_threshold}%\n\n"
+        "Выберите что хотите настроить:"
+    )
+    
+    await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на inline-кнопки"""
@@ -789,38 +699,66 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
     
-    if data == "set_ps5_price":
-        db.set_waiting_for_price(user_id, 1, 'ps5')
-        await query.edit_message_text(
-            "🎮 **Установка цены для PS5**\n\n"
-            "Введите максимальную цену в рублях (только цифры):\n\n"
-            "💡 **Пример:** 50000\n\n"
-            "🔍 Бот будет искать PS5 в диапазоне согласно вашему автоматическому порогу.",
-            parse_mode='Markdown'
-        )
+    # Обработка управления поиском
+    if data == "start_search":
+        # Включаем поиск для пользователя
+        db.set_user_search_active(user_id, True)
+        
+        # await query.edit_message_text(
+        #     "🟢 **Поиск активирован!**\n\n"
+        #     "Теперь бот будет присылать вам уведомления о найденных товарах.\n"
+        #     "Следующая проверка цен произойдет в течение 5 минут.\n\n"
+        #     "⚙️ *Вы можете остановить поиск в любой момент*",
+        #     parse_mode='Markdown'
+        # )
+        # Показываем обновленное меню
+        await show_menu(update, context)
     
-    elif data == "set_iphone_price":
-        db.set_waiting_for_price(user_id, 1, 'iphone')
-        await query.edit_message_text(
-            "📱 **Установка цены для iPhone 16**\n\n"
-            "Введите максимальную цену в рублях (только цифры):\n\n"
-            "💡 **Пример:** 80000\n\n"
-            "🔍 Бот будет искать iPhone 16 в диапазоне согласно вашему автоматическому порогу.",
-            parse_mode='Markdown'
-        )
+    elif data == "stop_search":
+        # Выключаем поиск для пользователя
+        db.set_user_search_active(user_id, False)
+        
+        # await query.edit_message_text(
+        #     "⏹️ **Поиск остановлен**\n\n"
+        #     "Бот больше не будет присылать уведомления о найденных товарах.\n\n"
+        #     "🔍 *Чтобы возобновить поиск, нажмите «Начать поиск»*",
+        #     parse_mode='Markdown'
+        # )
+        # Показываем обновленное меню
+        await show_menu(update, context)
+    
+    # Меню настроек
+    elif data == "settings_menu":
+        await show_settings_menu(update, context)
     
     elif data == "set_discount":
         db.set_waiting_for_price(user_id, 1, 'discount')
+        
+        # Создаем клавиатуру с кнопкой "Назад"
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_settings")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await query.edit_message_text(
             "🏷️ **Установка процента скидки**\n\n"
             "Введите процент скидки WB (только цифры):\n\n"
             "💡 **Пример:** 7\n\n"
             "ℹ️ Бот будет применять эту скидку при расчете итоговой цены.",
+            reply_markup=reply_markup,
             parse_mode='Markdown'
         )
-    
+
+    # Настройка порога
     elif data == "set_threshold":
         db.set_waiting_for_price(user_id, 1, 'threshold')
+        
+        # Создаем клавиатуру с кнопкой "Назад"
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_settings")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await query.edit_message_text(
             "📉 **Автоматический минимальный порог**\n\n"
             "Эта функция избавляет вас от необходимости каждый раз вручную указывать диапазон цен.\n\n"
@@ -832,13 +770,150 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "- Бот будет автоматически отслеживать его в диапазоне от 3 000 ₽ до 10 000 ₽.\n\n"
             "**Текущее значение:** 50%\n\n"
             "Введите процент от 0 до 100. Чтобы отключить, введите 0.",
+            reply_markup=reply_markup,
             parse_mode='Markdown'
         )
     
+    # Меню товаров
+    elif data == "products_menu":
+        await show_products_menu(update, context)
+    
+    # Категории товаров
+    elif data == "iphone_menu":
+        await show_iphone_menu(update, context)
+    
+    elif data == "ps5_menu":
+        await show_ps5_menu(update, context)
+    
+    # Установка цен для iPhone
+    elif data == "set_iphone_16_128":
+        db.set_waiting_for_price(user_id, 1, 'iphone_16_128')
+        
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📱 **Установка цены для iPhone 16 128Gb**\n\n"
+            "Введите максимальную цену в рублях (только цифры):\n\n"
+            "💡 **Пример:** 80000\n\n"
+            "🔍 Бот будет искать iPhone 16 128Gb в диапазоне согласно вашему автоматическому порогу.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+    elif data == "set_iphone_16_256":
+        db.set_waiting_for_price(user_id, 1, 'iphone_16_256')
+        
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📱 **Установка цены для iPhone 16 256Gb**\n\n"
+            "Введите максимальную цену в рублях (только цифры):\n\n"
+            "💡 **Пример:** 90000\n\n"
+            "🔍 Бот будет искать iPhone 16 256Gb в диапазоне согласно вашему автоматическому порогу.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+    elif data == "set_iphone_16_pro_128":
+        db.set_waiting_for_price(user_id, 1, 'iphone_16_pro_128')
+        
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📱 **Установка цены для iPhone 16 Pro 128Gb**\n\n"
+            "Введите максимальную цену в рублях (только цифры):\n\n"
+            "💡 **Пример:** 100000\n\n"
+            "🔍 Бот будет искать iPhone 16 Pro 128Gb в диапазоне согласно вашему автоматическому порогу.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+    elif data == "set_iphone_16_pro_256":
+        db.set_waiting_for_price(user_id, 1, 'iphone_16_pro_256')
+        
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📱 **Установка цены для iPhone 16 Pro 256Gb**\n\n"
+            "Введите максимальную цену в рублях (только цифры):\n\n"
+            "💡 **Пример:** 110000\n\n"
+            "🔍 Бот будет искать iPhone 16 Pro 256Gb в диапазоне согласно вашему автоматическому порогу.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+    elif data == "set_iphone_16_pro_max":
+        db.set_waiting_for_price(user_id, 1, 'iphone_16_pro_max')
+        
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📱 **Установка цены для iPhone 16 Pro Max 256Gb**\n\n"
+            "Введите максимальную цену в рублях (только цифры):\n\n"
+            "💡 **Пример:** 120000\n\n"
+            "🔍 Бот будет искать iPhone 16 Pro Max 256Gb в диапазоне согласно вашему автоматическому порогу.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+    # Установка цены для PS5
+    elif data == "set_ps5_slim_disk":
+        db.set_waiting_for_price(user_id, 1, 'ps5_slim_disk')
+        
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_ps5")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "🎮 **Установка цены для PlayStation 5 Slim с дисководом**\n\n"
+            "Введите максимальную цену в рублях (только цифры):\n\n"
+            "💡 **Пример:** 50000\n\n"
+            "🔍 Бот будет искать PS5 Slim с дисководом в диапазоне согласно вашему автоматическому порогу.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    
+    # Кнопки навигации
+    elif data == "back_to_products":
+        await show_products_menu(update, context)
+
     elif data == "back_to_main":
-        await show_main_menu(update, context)
+        await show_menu(update, context)
+
     elif data == "back_to_settings":
+        # Очищаем состояние ожидания ввода и возвращаем в меню настроек
+        db.clear_waiting_for_price(user_id)
         await show_settings_menu(update, context)
+
+    elif data == "back_to_iphone":
+        # Очищаем состояние ожидания ввода и возвращаем в меню iPhone
+        db.clear_waiting_for_price(user_id)
+        await show_iphone_menu(update, context)
+
+    elif data == "back_to_ps5":
+        # Очищаем состояние ожидания ввода и возвращаем в меню PS5
+        db.clear_waiting_for_price(user_id)
+        await show_ps5_menu(update, context)
+    
+    # Обработка несуществующих команд
+    else:
+        await show_menu(update, context)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений для установки цен, автоматического порога и скидки"""
@@ -848,11 +923,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if waiting_for_price and product_type:
         text = update.message.text.strip()
         
+        # Обработка команды "назад" через текст
+        if text.lower() in ['назад', 'back', 'отмена', 'cancel']:
+            db.clear_waiting_for_price(user_id)
+            await show_menu(update, context)
+            return
+        
         if not re.match(r'^\d+$', text):
+            # Создаем клавиатуру с кнопкой "Назад" для сообщения об ошибке
+            keyboard = [
+                [InlineKeyboardButton("⬅️ Назад", callback_data=f"back_to_{'settings' if product_type in ['discount', 'threshold'] else 'main'}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             await update.message.reply_text(
                 "❌ Пожалуйста, введите только цифры (без пробелов, букв и других символов)\n\n"
-                "💡 **Пример:** 50000",
-                reply_markup=get_main_reply_keyboard()
+                "💡 **Пример:** 50000\n\n"
+                "🔙 *Или нажмите «Назад» чтобы отменить*",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
             )
             return
         
@@ -861,28 +950,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if product_type == 'discount':
                 if value <= 0 or value > 50:
+                    keyboard = [
+                        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_settings")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
                     await update.message.reply_text(
                         "❌ Скидка должна быть от 1% до 50%",
-                        reply_markup=get_main_reply_keyboard()
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
                     )
                     return
                 
                 # Получаем старую скидку для информационного сообщения
-                _, _, old_discount, _ = db.get_user_settings(user_id)
+                discount_percent, _ = db.get_user_settings(user_id)
                     
-                # Устанавливаем новую скидку (метод автоматически обновит историю цен)
+                # Устанавливаем новую скидку
                 db.set_user_discount(user_id, value)
                 db.clear_waiting_for_price(user_id)
                 
                 # Создаем inline-клавиатуру с кнопкой "На главную"
                 keyboard = [
-                    [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_settings")]
+                    [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 message = (
-                    f"✅ **Процент скидки изменен:** {old_discount}% → {value}%\n\n"
-                    f"Теперь бот будет применять {value}% скидку при расчете цен.\n\n"
+                    f"✅ **Процент скидки изменен:** {discount_percent}% → {value}%\n\n"
+                    f"Теперь бот будет применять {value}% скидку при расчете цен."
                 )
                 
                 await update.message.reply_text(
@@ -893,9 +988,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             elif product_type == 'threshold':
                 if value < 0 or value > 100:
+                    keyboard = [
+                        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_settings")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
                     await update.message.reply_text(
                         "❌ Порог должен быть от 0% до 100%",
-                        reply_markup=get_main_reply_keyboard()
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
                     )
                     return
                 
@@ -904,11 +1005,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Создаем inline-клавиатуру с кнопкой "На главную"
                 keyboard = [
-                    [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_settings")]
+                    [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 if value > 0:
-                    
                     await update.message.reply_text(
                         f"✅ **Автоматический порог установлен:** {value}%\n\n"
                         f"Теперь бот будет искать товары в диапазоне от {value}% до 100% от указанной вами цены.",
@@ -923,22 +1024,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode='Markdown'
                     )
             
-            elif product_type in ['ps5', 'iphone']:
+            # Обработка установки цен для товаров
+            elif product_type in ['iphone_16_128', 'iphone_16_256', 'iphone_16_pro_128', 
+                                'iphone_16_pro_256', 'iphone_16_pro_max', 'ps5_slim_disk']:
                 if value <= 0:
+                    keyboard = [
+                        [InlineKeyboardButton("⬅️ Назад", callback_data=f"back_to_{'iphone' if 'iphone' in product_type else 'ps5'}")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
                     await update.message.reply_text(
                         "❌ Цена должна быть положительным числом",
-                        reply_markup=get_main_reply_keyboard()
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
                     )
                     return
                 
-                # Сохраняем цену
-                db.set_user_price(user_id, product_type, value)
+                # Сохраняем цену в новой таблице
+                db.set_user_product_price(user_id, product_type, value)
                 db.clear_waiting_for_price(user_id)
                 
-                product_name = "PS5" if product_type == "ps5" else "iPhone 16"
+                # Получаем название продукта из конфига
+                config = db.get_search_config(product_type)
+                product_name = config['product_name'] if config else product_type
                 
                 # Получаем текущий порог для отображения диапазона
-                _, _, _, price_threshold = db.get_user_settings(user_id)
+                _, price_threshold = db.get_user_settings(user_id)
                 
                 if price_threshold > 0:
                     min_price = math.floor(value * (price_threshold / 100))
@@ -948,26 +1059,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Создаем inline-клавиатуру с кнопкой "На главную"
                 keyboard = [
-                    [InlineKeyboardButton("⬅️ На главную", callback_data="back_to_main")]
+                    [InlineKeyboardButton("⬅️ В меню", callback_data="back_to_main")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await update.message.reply_text(
                     f"✅ **Максимальная цена для {product_name} установлена:** {value:,} руб.\n\n".replace(',', ' ') +
                     f"**Диапазон поиска:** {range_info}\n\n" +
-                    f"🔍 Бот будет искать {product_name} в диапазоне: {range_info}\n",
+                    f"🔍 Бот будет искать {product_name} в диапазоне: {range_info}",
                     reply_markup=reply_markup,
                     parse_mode='Markdown'
                 )
             
         except ValueError:
+            keyboard = [
+                [InlineKeyboardButton("⬅️ Назад", callback_data=f"back_to_{'settings' if product_type in ['discount', 'threshold'] else 'main'}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             await update.message.reply_text(
-                "❌ Укажите корректное значение (только цифры)",
-                reply_markup=get_main_reply_keyboard()
+                "❌ Укажите корректное значение (только цифры)\n\n"
+                "🔙 *Или нажмите «Назад» чтобы отменить*",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
             )
     else:
         # Если пользователь отправил текст без контекста - показываем главное меню
-        await show_main_menu(update, context)
+        await show_menu(update, context)
 
 def main():
     """Запуск бота"""
@@ -979,7 +1097,7 @@ def main():
     application.add_handler(CallbackQueryHandler(button_handler))
     
     # Обработчик для Reply клавиатуры
-    application.add_handler(MessageHandler(filters.Text(["🤖 Парсер", "⚙️ Настройки"]), handle_reply_keyboard))
+    application.add_handler(MessageHandler(filters.Text(["⚙️ Меню"]), handle_reply_keyboard))
     
     # Обработчик для текстовых сообщений (цен и скидок)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
