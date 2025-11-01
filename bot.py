@@ -15,7 +15,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
 #BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 
 HEADERS_FIRST = {
@@ -1104,14 +1104,14 @@ def main():
     
     job_queue = application.job_queue
     if job_queue:
-        job_queue.run_repeating(price_checker_job, interval=60, first=10)
+        job_queue.run_repeating(price_checker_job, interval=30, first=10)
         print("✅ JobQueue запущен")
     else:
         print("❌ JobQueue не доступен, используем альтернативный метод")
         async def run_checks():
             while True:
                 await check_all_prices(application)
-                await asyncio.sleep(60)
+                await asyncio.sleep(30)
         asyncio.create_task(run_checks())
     
     print("🤖 Бот запущен!")
