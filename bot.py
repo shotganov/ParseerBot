@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime, timedelta
 import math
 import json
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, LinkPreviewOptions
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 import logging
 import re
@@ -15,8 +15,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
-BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
+BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+#BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 400
 COUNTER = 0
@@ -238,7 +238,7 @@ async def send_product_messages(application, user_id, products, title, max_produ
                 chat_id=user_id,
                 text=message,
                 reply_markup=reply_markup,
-                link_preview_options=LinkPreviewOptions(is_disabled=True), 
+                disable_web_page_preview=True,
                 parse_mode='Markdown'
             )
             
