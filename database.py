@@ -5,10 +5,12 @@ import json
 
 class Database:
     def __init__(self):
-        self.conn = sqlite3.connect('database.db', check_same_thread=False)
+        self.conn = sqlite3.connect('database_new.db', check_same_thread=False)
         self.create_tables()
         self.initialize_iphone_configs()
 
+        if not self.get_system_config("wb_authorization"):
+            self.set_system_config("wb_authorization", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjE1NzE2MTgsInVzZXIiOiI1NDU4NDA2MiIsInNoYXJkX2tleSI6IjYiLCJjbGllbnRfaWQiOiJ3YiIsInNlc3Npb25faWQiOiJhZjJjOGI2ZDYxNDc0OTNhODkzYTlkNTY2Y2M0YWU3MyIsInZhbGlkYXRpb25fa2V5IjoiMjViNDExMjQwODdiMzM4YTFkMDBiOWVmYTZhYzlkOGZkYmVlZDRlNDcyMGVlMjQ2ZDdmM2YwMGI5YjFjODAxZCIsInBob25lIjoiSmI5N1U0UTdYa1pBT1I4SWMrUFVkZz09IiwidXNlcl9yZWdpc3RyYXRpb25fZHQiOjE2OTUwNDgzMzksInZlcnNpb24iOjJ9.JRRx-xVmOPm4021i8-RcLd1u3mKy0mAd8Gr182I-a-kf-WPDBRuu1sSUxg-A9xApUsdmZuWVvFIBdFVZHrP16EJkS88ObNJjKtguTf72QDfjn3pcua95vONpV_tOovviYUeN7vr9OgaX9mMEMcDOOdaR__mZMLEVUkkuBx54zblej_xQMtpW6wAYMiqnFi0tIKwR2Csfe_6w0nPUS3PQQ1opbmoH8kXrgbRzDD144Ib73NZo8rwc3BVOkg4a8tINQGuLxInpK8e5F4KN92HGRJdkCD_twsULXMiloZsWA42Biv1uPVCTtt0jr_thSgEpdBb3YfD-aYsZKT9oSkD1uQ")
     
     def create_tables(self):
         cursor = self.conn.cursor()
@@ -65,6 +67,26 @@ class Database:
                 exclude_keywords TEXT NOT NULL,  -- JSON список исключений
                 is_active BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_config (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_custom_links (
+                user_id INTEGER,
+                product_id INTEGER NOT NULL,  -- nm-артикул из ссылки
+                initial_price INTEGER NOT NULL,   -- макс. цена, при которой уведомлять
+                is_active BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, product_id),
+                FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
             )
         ''')
         
@@ -169,7 +191,20 @@ class Database:
                 'exclude_keywords': json.dumps([
                     "digital", "digital edition", "digital version",
                     "без дисковода", "без привода", "бездисковый", "бездисковая",
-                    "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии", "4", "4 slim"
+                    "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии", "4", "4 slim", "ssd-диск"
+                ], ensure_ascii=False),
+            }
+
+            # PS5 Pro
+            ps5_pro_config = {
+                'product_name': 'PlayStation 5 Pro',
+                'product_type': 'ps5_pro',
+                'search_queries': json.dumps([
+                    "playstation 5 pro"
+                ], ensure_ascii=False),
+                'exclude_keywords': json.dumps([
+                    "4 slim", "4 pro", "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
+                    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный", "ssd-диск"
                 ], ensure_ascii=False),
             }
             
@@ -177,7 +212,7 @@ class Database:
             configs = [
                 iphone_16_128_config, iphone_16_256_config, 
                 iphone_16_pro_128_config, iphone_16_pro_256_config, 
-                iphone_16_pro_max_config, ps5_slim_disk_config
+                iphone_16_pro_max_config, ps5_slim_disk_config, ps5_pro_config
             ]
             
             for config in configs:
@@ -195,25 +230,99 @@ class Database:
             self.conn.commit()
             print("✅ Конфиги для товаров инициализированы")
 
-    def set_user_search_active(self, user_id, active):
-      """Включает/выключает поиск для пользователя (устанавливает is_active для всех товаров)"""
+    def add_custom_link(self, user_id: int, product_id: int, initial_price: int):
+      cursor = self.conn.cursor()
+      cursor.execute('SELECT 1 FROM user_settings WHERE user_id = ?', (user_id,))
+      if not cursor.fetchone():
+          cursor.execute('INSERT INTO user_settings (user_id) VALUES (?)', (user_id,))
+      cursor.execute('''
+          INSERT OR REPLACE INTO user_custom_links (user_id, product_id, initial_price, is_active)
+          VALUES (?, ?, ?, 0)
+      ''', (user_id, product_id, initial_price))
+      self.conn.commit()
+
+    def delete_custom_link(self, user_id: int, product_id: int):
+      """ПОЛНОСТЬЮ удаляет кастомную ссылку из БД"""
+      cursor = self.conn.cursor()
+      cursor.execute('DELETE FROM user_custom_links WHERE user_id = ? AND product_id = ?', (user_id, product_id))
+      self.conn.commit()
+
+    def get_user_custom_links(self, user_id: int):
       cursor = self.conn.cursor()
       cursor.execute('''
-          UPDATE user_product_prices 
-          SET is_active = ? 
-          WHERE user_id = ?
+          SELECT product_id, initial_price
+          FROM user_custom_links
+          WHERE user_id = ? AND is_active = 1
+      ''', (user_id,))
+      return {row[0]: row[1] for row in cursor.fetchall()}
+
+    def cleanup_old_custom_links(self, days=30):
+      """Удаляет custom links старше N дней (по умолчанию 30)"""
+      cursor = self.conn.cursor()
+      cursor.execute('DELETE FROM user_custom_links WHERE created_at < datetime("now", ?)', (f"-{days} days",))
+      deleted = cursor.rowcount
+      self.conn.commit()
+      return deleted
+
+    def get_all_users_tracking_custom_link(self, product_id: int):
+        """Получает всех пользователей, отслеживающих конкретный артикул"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT ucl.user_id, ucl.initial_price, us.discount_percent, us.price_threshold
+            FROM user_custom_links ucl
+            JOIN user_settings us ON ucl.user_id = us.user_id
+            WHERE ucl.product_id = ? AND ucl.is_active = 1
+        ''', (product_id,))
+        return cursor.fetchall()
+
+    def deactivate_custom_link(self, user_id: int, product_id: int):
+        """Отключает отслеживание кастомной ссылки"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE user_custom_links SET is_active = 0
+            WHERE user_id = ? AND product_id = ?
+        ''', (user_id, product_id))
+        self.conn.commit()
+
+    def set_system_config(self, key: str, value: str):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO system_config (key, value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+        ''', (key, value))
+        self.conn.commit()
+
+    def get_system_config(self, key: str, default: str = None) -> str:
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT value FROM system_config WHERE key = ?', (key,))
+        result = cursor.fetchone()
+        return result[0] if result else default
+
+    def set_user_search_active(self, user_id, active):
+      """Включает/выключает поиск для пользователя (обновляет is_active в ОБОИХ таблицах)"""
+      cursor = self.conn.cursor()
+      # Обновляем стандартные товары
+      cursor.execute('''
+          UPDATE user_product_prices SET is_active = ? WHERE user_id = ?
+      ''', (active, user_id))
+      # Обновляем кастомные ссылки
+      cursor.execute('''
+          UPDATE user_custom_links SET is_active = ? WHERE user_id = ?
       ''', (active, user_id))
       self.conn.commit()
 
     def get_user_search_active(self, user_id):
-      """Проверяет, активен ли поиск для пользователя"""
       cursor = self.conn.cursor()
+      # Проверяем активность в ЛЮБОЙ таблице отслеживания
       cursor.execute('''
-          SELECT COUNT(*) FROM user_product_prices 
+          SELECT 1 FROM user_product_prices 
           WHERE user_id = ? AND is_active = 1 AND max_price > 0
-      ''', (user_id,))
-      result = cursor.fetchone()
-      return result[0] > 0 if result else False
+          UNION
+          SELECT 1 FROM user_custom_links 
+          WHERE user_id = ? AND is_active = 1
+          LIMIT 1
+      ''', (user_id, user_id))
+      return cursor.fetchone() is not None
 
     def get_users_with_active_search(self):
         """Получает всех пользователей с активным поиском"""
@@ -224,6 +333,18 @@ class Database:
         ''')
         return [row[0] for row in cursor.fetchall()]
 
+    def get_users_with_any_active_tracking(self):
+      """Возвращает всех пользователей, у которых есть хоть одно активное отслеживание (стандартное или кастомное)"""
+      cursor = self.conn.cursor()
+      cursor.execute('''
+          SELECT DISTINCT user_id FROM (
+              SELECT user_id FROM user_product_prices WHERE is_active = 1 AND max_price > 0
+              UNION
+              SELECT user_id FROM user_custom_links WHERE is_active = 1
+          )
+      ''')
+      return [row[0] for row in cursor.fetchall()]
+    
     def set_user_product_price(self, user_id, product_type, price):
       """Устанавливает максимальную цену для конкретного товара пользователя"""
       cursor = self.conn.cursor()
@@ -267,6 +388,15 @@ class Database:
       ''', (user_id,))
       return {row[0]: {'price': row[1], 'active': bool(row[2])} for row in cursor.fetchall()}
     
+    def get_all_user_custom_links(self, user_id: int):
+      """Возвращает ВСЕ кастомные ссылки пользователя (для отображения в меню)"""
+      cursor = self.conn.cursor()
+      cursor.execute('''
+          SELECT product_id, initial_price, is_active
+          FROM user_custom_links
+          WHERE user_id = ?
+      ''', (user_id,))
+      return {row[0]: {'price': row[1], 'active': bool(row[2])} for row in cursor.fetchall()}
 
     def get_active_user_product_prices(self, user_id):
       """Получает только активные цены товаров пользователя (для обратной совместимости)"""

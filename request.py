@@ -198,11 +198,8 @@ search_queries16 = [
 # ]
 
 iphone_exclude_keywords_16pro = [
-        "15", "14", "13", "11", "10", "xs", "xr", "7",
-        "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro",
-        "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
+        "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
         "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
-        "128", "512"
 ]
 
 def get_products_by_sort(query):
@@ -235,7 +232,7 @@ def get_products_by_sort(query):
 
 all_products = []
 product_ids = set()
-search_querys = ["iPhone 16 256"]
+search_querys = ["playstation 5 pro"]
 for search_query in search_querys:
     print(f"\n=== Поиск: '{search_query}' ===")
     
@@ -282,7 +279,7 @@ def should_exclude_product(id, name, product_type):
 
 
 links = []
-max_price = 62000
+max_price = 73000
 for i in range(len(all_products)):
     id = int(all_products[i]['id'])
     name = str(all_products[i]["name"])
