@@ -157,7 +157,7 @@ async def get_products_by_config(session, config):
         count_not_find_products = 0
         max_count_not_find_products = 2
         
-        for page in range(1, 100):
+        for page in range(1, 10):
             try:
 
                 url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={search_query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
