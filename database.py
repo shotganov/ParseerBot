@@ -19,7 +19,7 @@ class Database:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_settings (
                 user_id INTEGER PRIMARY KEY,
-                discount_percent INTEGER DEFAULT 7,
+                discount_percent INTEGER DEFAULT 10,
                 price_threshold INTEGER DEFAULT 50,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -42,7 +42,7 @@ class Database:
                 user_id INTEGER,
                 product_id INTEGER,
                 current_price INTEGER,  
-                discount_percent INTEGER DEFAULT 7,
+                discount_percent INTEGER DEFAULT 10,
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, product_id),
                 FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
@@ -111,7 +111,7 @@ class Database:
                 'exclude_keywords': json.dumps([
                     "15", "14", "13", "11", "10", "xs", "xr", "7",
                     "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro",
-                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
+                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
                     "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                     "256", "512"
                 ], ensure_ascii=False),
@@ -126,7 +126,7 @@ class Database:
                 'exclude_keywords': json.dumps([
                   "15", "14", "13", "11", "10", "xs", "xr", "7",
                   "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro",
-                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                   "128", "512"
                 ], ensure_ascii=False),
@@ -142,7 +142,7 @@ class Database:
                     "15", "14", "13", "11", "xr", "xs", "7",
                     "16e", "16 e", "16е", "16 е", "plus", "pro max", "16 128", "16 256", "16 512",
                     "Air", "iphone 16 s",
-                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
+                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
                     "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка!", "обменка", "обменный",
                     "256", "512", "1tb"
                 ], ensure_ascii=False),
@@ -158,7 +158,7 @@ class Database:
                     "15", "14", "13", "11", "xr", "xs", "7",
                     "16e", "16 e", "16е", "16 е", "plus", "pro max", "16 128", "16 256", "16 512",
                     "Air", "iphone 16 s",
-                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
+                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
                     "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                     "128", "512", "1tb"
                 ], ensure_ascii=False),
@@ -175,7 +175,7 @@ class Database:
                     "15", "14", "13", "11", "7",
                     "16e", "16 e", "16е", "16 е", "plus", "16 128", "16 256", "16 512",
                     "Air", "16 pro 128", "16 pro 256", "16 pro 512", "16 pro 1tb", "iphone 16 s",
-                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used",
+                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
                     "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                     "128",
                 ], ensure_ascii=False),
@@ -191,7 +191,7 @@ class Database:
                 'exclude_keywords': json.dumps([
                     "digital", "digital edition", "digital version",
                     "без дисковода", "без привода", "бездисковый", "бездисковая",
-                    "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии", "4", "4 slim", "ssd-диск"
+                    "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии", "4", "4 slim", "ssd-диск", "витринная",
                 ], ensure_ascii=False),
             }
 
@@ -204,7 +204,7 @@ class Database:
                 ], ensure_ascii=False),
                 'exclude_keywords': json.dumps([
                     "4 slim", "4 pro", "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
-                    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный", "ssd-диск"
+                    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный", "ssd-диск", "витринная",
                 ], ensure_ascii=False),
             }
             
@@ -363,7 +363,7 @@ class Database:
       if not cursor.fetchone():
           cursor.execute('''
               INSERT INTO user_settings (user_id, discount_percent, price_threshold)
-              VALUES (?, 7, 50)
+              VALUES (?, 10, 50)
           ''', (user_id,))
       
       self.conn.commit()
@@ -435,7 +435,7 @@ class Database:
         cursor = self.conn.cursor()
         cursor.execute('SELECT discount_percent, price_threshold FROM user_settings WHERE user_id = ?', (user_id,))
         result = cursor.fetchone()
-        return (7, 50) if not result else (result[0], result[1])
+        return (10, 50) if not result else (result[0], result[1])
 
     def set_user_threshold(self, user_id, threshold):
         """Установка общего автоматического порога для пользователя"""
@@ -455,7 +455,7 @@ class Database:
         cursor = self.conn.cursor()
         
         # Получаем старую скидку
-        old_discount = 7  # значение по умолчанию
+        old_discount = 10  # значение по умолчанию
         cursor.execute('SELECT discount_percent FROM user_settings WHERE user_id = ?', (user_id,))
         result = cursor.fetchone()
         if result:

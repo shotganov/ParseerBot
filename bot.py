@@ -15,7 +15,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
 #BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 400
@@ -843,7 +843,7 @@ async def show_ps5_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = (
         "🎮 **PlayStation 5**\n\n"
-        "Установите цену для PlayStation 5 Slim с дисководом:"
+        "Выберите конкретную модель для установки цены::"
     )
     
     await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
