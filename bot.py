@@ -7,6 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 import logging
 import re
+import random
 from database import Database
 
 # Настройка логирования
@@ -15,7 +16,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
 #BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 400
@@ -68,6 +69,97 @@ async def get_products_by_config(session, config):
         
         for page in range(1, 100):
             try:
+                url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={search_query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
+               
+                print(f"🔍 Запрос: {search_query}, страница {page}")
+                
+                async with session.get(url, headers=get_headers_from_db(), timeout=10) as response:
+                    response_text = await response.text()
+                    
+                    if not response_text.strip():
+                        print(f"⚠️ Получена пустая страница для {search_query}, страница {page}")
+                        empty_page_count += 1
+                        if empty_page_count >= max_empty_pages:
+                            print(f"🛑 Получено {empty_page_count} пустых страниц подряд, завершаем цикл для '{search_query}'")
+                            break
+                        continue
+                    
+                    try:
+                        data = json.loads(response_text)
+                    except json.JSONDecodeError as e:
+                        print(f"❌ Ошибка парсинга JSON для {search_query}: {e}")
+                        empty_page_count += 1
+                        if empty_page_count >= max_empty_pages:
+                            print(f"🛑 Получено {empty_page_count} ошибок JSON подряд, завершаем цикл для '{search_query}'")
+                            break
+                        continue
+                
+                empty_page_count = 0
+                
+                if max_count_not_find_products == count_not_find_products:
+                    print(f"🛑 В ответе нет ключа 'products' для запроса более {max_count_not_find_products} раз")
+                    break
+                
+                if "products" not in data:
+                    print(f"❌ В ответе нет ключа 'products' для запроса: {search_query}")
+                    count_not_find_products += 1
+                    continue
+                
+                count_not_find_products = 0
+                if not data["products"]:
+                    print(f"ℹ️ Нет товаров на странице {page} для запроса: {search_query}")
+                    break
+                
+                products_before = len(products)
+                for product in data["products"]:
+                    if product["id"] not in product_ids:
+                        product_ids.add(product["id"])
+                        products.append(product)
+                
+                products_added = len(products) - products_before
+                print(f"✅ Найдено {len(data['products'])} товаров, добавлено {products_added} новых для '{search_query}'")
+                
+                if products_added == 0:
+                    print(f"🛑 Не добавлено новых товаров на странице {page}, завершаем пагинацию для '{search_query}'")
+                    break
+                
+                if len(data["products"]) < 100:
+                    print(f"ℹ️ Меньше 100 товаров на странице {page}, завершаем пагинацию для '{search_query}'")
+                    break
+                    
+            except asyncio.TimeoutError:
+                print(f"⏰ Таймаут при запросе: {search_query}, страница {page}")
+                empty_page_count += 1
+                if empty_page_count >= max_empty_pages:
+                    print(f"🛑 Получено {empty_page_count} таймаутов подряд, завершаем цикл для '{search_query}'")
+                    break
+            except Exception as e:
+                print(f"❌ Ошибка при парсинге {search_query}: {e}")
+                empty_page_count += 1
+                if empty_page_count >= max_empty_pages:
+                    print(f"🛑 Получено {empty_page_count} ошибок подряд, завершаем цикл для '{search_query}'")
+                    break
+    
+    print(f"📦 Всего найдено {len(products)} товаров для конфига")
+    return products
+
+async def get_products_by_config(session, config):
+    """Универсальная функция для получения товаров по конфигу из БД"""
+    products = []
+    product_ids = set()
+    
+    search_queries = config['search_queries']
+    exclude_keywords = config['exclude_keywords']
+    
+    for search_query in search_queries:
+        empty_page_count = 0
+        max_empty_pages = 2
+        count_not_find_products = 0
+        max_count_not_find_products = 2
+        
+        for page in range(1, 100):
+            try:
+
                 url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={search_query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
                
                 print(f"🔍 Запрос: {search_query}, страница {page}")
@@ -387,7 +479,7 @@ async def check_all_prices(application):
             print(f"🧹 Очищено {deleted_custom} старых кастомных ссылок")
             db.set_system_config("last_custom_cleanup", now.isoformat())
 
-        connector = aiohttp.TCPConnector(limit=10)
+        connector = aiohttp.TCPConnector(limit=20)
         async with aiohttp.ClientSession(connector=connector) as session:
             print("🔄 Начинаем сбор товаров...")
 
@@ -417,6 +509,8 @@ async def check_all_prices(application):
                     products = await get_products_by_config(session, config)
                     all_products[product_type] = products
                     print(f"✅ Найдено {len(products)} товаров для {product_type}")
+                    
+
 
             # Проверка токена через iPhone 16
             await check_wb_token_health(application, all_products)
