@@ -59,15 +59,16 @@ class Database:
         ''')
         
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS search_configs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product_name TEXT NOT NULL,      -- Человекочитаемое название
-                product_type TEXT NOT NULL,      -- 'iphone_16', 'iphone_16_pro'
-                search_queries TEXT NOT NULL,    -- JSON список запросов
-                exclude_keywords TEXT NOT NULL,  -- JSON список исключений
-                is_active BOOLEAN DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+          CREATE TABLE IF NOT EXISTS search_configs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              product_name TEXT NOT NULL,
+              product_type TEXT NOT NULL,
+              search_queries TEXT NOT NULL,    -- JSON список запросов
+              include_keywords TEXT NOT NULL,  -- ✅ НОВОЕ: JSON список обязательных слов
+              exclude_keywords TEXT NOT NULL,  -- JSON список исключений
+              is_active BOOLEAN DEFAULT 1,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
         ''')
 
         cursor.execute('''
@@ -93,142 +94,189 @@ class Database:
         self.conn.commit()
     
     def initialize_iphone_configs(self):
-        """Инициализирует конфиги для iPhone 16 и 16 Pro"""
-        cursor = self.conn.cursor()
-        
-        # Проверяем, есть ли уже конфиги
-        cursor.execute('SELECT COUNT(*) FROM search_configs WHERE product_type LIKE "iphone%"')
-        if cursor.fetchone()[0] == 0:
-            print("🔄 Инициализация конфигов для iPhone...")
-            
-            # iPhone 16
-            iphone_16_128_config = {
-                'product_name': 'iPhone 16 128',
-                'product_type': 'iphone_16_128',
-                'search_queries': json.dumps([
-                    "iPhone 16 128"
-                ], ensure_ascii=False),
-                'exclude_keywords': json.dumps([
-                    "15", "14", "13", "11", "10", "xs", "xr", "7",
-                    "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro",
-                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
-                    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
-                    "256", "512", "пonepжaнный"
-                ], ensure_ascii=False),
-            }
-            
-            iphone_16_256_config = {
-                'product_name': 'iPhone 16 256',
-                'product_type': 'iphone_16_256',
-                'search_queries': json.dumps([
-                    "iPhone 16 256"
-                ], ensure_ascii=False),
-                'exclude_keywords': json.dumps([
+      """Инициализирует конфиги для iPhone 16 и 16 Pro с обязательными словами"""
+      cursor = self.conn.cursor()
+      
+      # Проверяем, есть ли уже конфиги
+      cursor.execute('SELECT COUNT(*) FROM search_configs WHERE product_type LIKE "iphone%"')
+      if cursor.fetchone()[0] == 0:
+          print("🔄 Инициализация конфигов для товаров...")
+          
+          # iPhone 16 128GB
+          iphone_16_128_config = {
+              'product_name': 'iPhone 16 128',
+              'product_type': 'iphone_16_128',
+              'search_queries': json.dumps([
+                  "iPhone 16 128"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "iphone", "16", "128"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
                   "15", "14", "13", "11", "10", "xs", "xr", "7",
-                  "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro",
+                  "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro", "iphone 12", 
                   "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
-                  "128", "512", "пonepжaнный"
-                ], ensure_ascii=False),
-            }
-            
-            iphone_16_pro_128_config = {
-                'product_name': 'iPhone 16 Pro 128',
-                'product_type': 'iphone_16_pro_128', 
-                'search_queries': json.dumps([
-                    "iPhone 16 Pro 128"
-                ], ensure_ascii=False),
-                'exclude_keywords': json.dumps([
-                    "15", "14", "13", "11", "xr", "xs", "7",
-                    "16e", "16 e", "16е", "16 е", "plus", "pro max", "16 128", "16 256", "16 512",
-                    "Air", "iphone 16 s",
-                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
-                    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка!", "обменка", "обменный",
-                    "256", "512", "1tb", "пonepжaнный"
-                ], ensure_ascii=False),
-            }
-            
-            iphone_16_pro_256_config = {
-                'product_name': 'iPhone 16 Pro 256',
-                'product_type': 'iphone_16_pro_256', 
-                'search_queries': json.dumps([
-                    "iPhone 16 Pro 256"
-                ], ensure_ascii=False),
-                'exclude_keywords': json.dumps([
-                    "15", "14", "13", "11", "xr", "xs", "7",
-                    "16e", "16 e", "16е", "16 е", "plus", "pro max", "16 128", "16 256", "16 512",
-                    "Air", "iphone 16 s",
-                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
-                    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
-                    "128", "512", "1tb", "пonepжaнный"
-                ], ensure_ascii=False),
-            }
+                  "256", "512", "пonepжaнный"
+              ], ensure_ascii=False),
+          }
+          
+          # iPhone 16 256GB
+          iphone_16_256_config = {
+              'product_name': 'iPhone 16 256',
+              'product_type': 'iphone_16_256',
+              'search_queries': json.dumps([
+                  "iPhone 16 256"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "iphone", "16", "256"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                "15", "14", "13", "11", "10", "xs", "xr", "7",
+                "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro",
+                "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
+                "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
+                "128", "512", "пonepжaнный"
+              ], ensure_ascii=False),
+          }
+          
+          # iPhone 16 Pro 128GB
+          iphone_16_pro_128_config = {
+              'product_name': 'iPhone 16 Pro 128',
+              'product_type': 'iphone_16_pro_128', 
+              'search_queries': json.dumps([
+                  "iPhone 16 Pro 128"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "iphone", "16", "pro", "128"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "15", "14", "13", "11", "xr", "xs", "7",
+                  "16e", "16 e", "16е", "16 е", "plus", "pro max", "16 128", "16 256", "16 512",
+                  "Air", "iphone 16 s",
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка!", "обменка", "обменный",
+                  "256", "512", "1tb", "пonepжaнный"
+              ], ensure_ascii=False),
+          }
+          
+          # iPhone 16 Pro 256GB
+          iphone_16_pro_256_config = {
+              'product_name': 'iPhone 16 Pro 256',
+              'product_type': 'iphone_16_pro_256', 
+              'search_queries': json.dumps([
+                  "iPhone 16 Pro 256"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "iphone", "16", "pro", "256"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "15", "14", "13", "11", "xr", "xs", "7",
+                  "16e", "16 e", "16е", "16 е", "plus", "pro max", "16 128", "16 256", "16 512",
+                  "Air", "iphone 16 s",
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
+                  "128", "512", "1tb", "пonepжaнный"
+              ], ensure_ascii=False),
+          }
 
-            # iPhone 16 Pro Max
-            iphone_16_pro_max_config = {
-                'product_name': 'iPhone 16 Pro Max',
-                'product_type': 'iphone_16_pro_max',
-                'search_queries': json.dumps([
-                    "iPhone 16 Pro Max"
-                ], ensure_ascii=False),
-                'exclude_keywords': json.dumps([
-                    "15", "14", "13", "11", "7",
-                    "16e", "16 e", "16е", "16 е", "plus", "16 128", "16 256", "16 512",
-                    "Air", "16 pro 128", "16 pro 256", "16 pro 512", "16 pro 1tb", "iphone 16 s",
-                    "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
-                    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
-                    "128", "ПonepЖaнHый"
-                ], ensure_ascii=False),
-            }
+          # iPhone 16 Pro Max
+          iphone_16_pro_max_config = {
+              'product_name': 'iPhone 16 Pro Max',
+              'product_type': 'iphone_16_pro_max',
+              'search_queries': json.dumps([
+                  "iPhone 16 Pro Max"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "iphone", "16", "pro", "max"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "15", "14", "13", "11", "7",
+                  "16e", "16 e", "16е", "16 е", "plus", "16 128", "16 256", "16 512",
+                  "Air", "16 pro 128", "16 pro 256", "16 pro 512", "16 pro 1tb", "iphone 16 s",
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
+                  "128", "ПonepЖaнHый"
+              ], ensure_ascii=False),
+          }
 
-            # PS5 Slim
-            ps5_slim_disk_config = {
-                'product_name': 'PlayStation 5 Slim',
-                'product_type': 'ps5_slim_disk',
-                'search_queries': json.dumps([
-                    "playstation 5 slim"
-                ], ensure_ascii=False),
-                'exclude_keywords': json.dumps([
-                    "digital", "digital edition", "digital version",
-                    "без дисковода", "без привода", "бездисковый", "бездисковая",
-                    "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии", "4", "4 slim", "ssd-диск", "витринная",
-                ], ensure_ascii=False),
-            }
+          # iPhone 16 Pro Max 256GB
+          iphone_16_pro_max_256_config = {
+              'product_name': 'iPhone 16 Pro Max 256',
+              'product_type': 'iphone_16_pro_max_256',
+              'search_queries': json.dumps([
+                  "iPhone 16 Pro Max 256"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "iphone", "16", "pro", "max", "256"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "15", "14", "13", "11", "7",
+                  "16e", "16 e", "16е", "16 е", "plus", "16 128", "16 256", "16 512",
+                  "Air", "16 pro 128", "16 pro 256", "16 pro 512", "16 pro 1tb", "iphone 16 s",
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
+                  "128", "512", "1tb", "ПonepЖaнHый"
+              ], ensure_ascii=False),
+          }
 
-            # PS5 Pro
-            ps5_pro_config = {
-                'product_name': 'PlayStation 5 Pro',
-                'product_type': 'ps5_pro',
-                'search_queries': json.dumps([
-                    "playstation 5 pro"
-                ], ensure_ascii=False),
-                'exclude_keywords': json.dumps([
-                    "4 slim", "4 pro", "5 slim", "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
-                    "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный", "ssd-диск", "витринная"
-                ], ensure_ascii=False),
-            }
-            
-            # Вставляем конфиги
-            configs = [
-                iphone_16_128_config, iphone_16_256_config, 
-                iphone_16_pro_128_config, iphone_16_pro_256_config, 
-                iphone_16_pro_max_config, ps5_slim_disk_config, ps5_pro_config
-            ]
-            
-            for config in configs:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO search_configs 
-                    (product_name, product_type, search_queries, exclude_keywords)
-                    VALUES (?, ?, ?, ?)
-                ''', (
-                    config['product_name'],
-                    config['product_type'],
-                    config['search_queries'],
-                    config['exclude_keywords']
-                ))
-            
-            self.conn.commit()
-            print("✅ Конфиги для товаров инициализированы")
+
+          # PS5 Slim
+          ps5_slim_disk_config = {
+              'product_name': 'PlayStation 5 Slim',
+              'product_type': 'ps5_slim_disk',
+              'search_queries': json.dumps([
+                  "playstation 5 slim"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "playstation", "5", "slim"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "digital", "digital edition", "digital version",
+                  "без дисковода", "без привода", "бездисковый", "бездисковая",
+                  "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии", "4", "4 slim", "ssd-диск", "витринная",
+              ], ensure_ascii=False),
+          }
+
+          # PS5 Pro
+          ps5_pro_config = {
+              'product_name': 'PlayStation 5 Pro',
+              'product_type': 'ps5_pro',
+              'search_queries': json.dumps([
+                  "playstation 5 pro"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "playstation", "5", "pro"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "4 slim", "4 pro", "5 slim", "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный", "ssd-диск", "витринная"
+              ], ensure_ascii=False),
+          }
+
+          # Вставляем конфиги
+          configs = [
+              iphone_16_128_config, iphone_16_256_config, 
+              iphone_16_pro_128_config, iphone_16_pro_256_config, 
+              iphone_16_pro_max_config, iphone_16_pro_max_256_config, 
+              ps5_slim_disk_config, ps5_pro_config
+          ]
+          
+          for config in configs:
+              cursor.execute('''
+                  INSERT OR REPLACE INTO search_configs 
+                  (product_name, product_type, search_queries, include_keywords, exclude_keywords)
+                  VALUES (?, ?, ?, ?, ?)
+              ''', (
+                  config['product_name'],
+                  config['product_type'],
+                  config['search_queries'],
+                  config['include_keywords'],
+                  config['exclude_keywords']
+              ))
+          
+          self.conn.commit()
+          print(f"✅ Конфиги для {len(configs)} товаров инициализированы с обязательными словами")
 
     def add_custom_link(self, user_id: int, product_id: int, initial_price: int):
       cursor = self.conn.cursor()
@@ -494,27 +542,28 @@ class Database:
     # Остальные методы остаются без изменений
 
     def get_search_config(self, product_type):
-        """Получает конфиг для конкретного типа продукта"""
-        cursor = self.conn.cursor()
-        cursor.execute(
-            'SELECT product_name, search_queries, exclude_keywords FROM search_configs WHERE product_type = ? AND is_active = 1',
-            (product_type,)
-        )
-        result = cursor.fetchone()
-        
-        if result:
-            return {
-                'product_name': result[0],
-                'search_queries': json.loads(result[1]),
-                'exclude_keywords': json.loads(result[2]),
-            }
-        return None
+      """Получает конфиг для конкретного типа продукта с обязательными словами"""
+      cursor = self.conn.cursor()
+      cursor.execute(
+          'SELECT product_name, search_queries, include_keywords, exclude_keywords FROM search_configs WHERE product_type = ? AND is_active = 1',
+          (product_type,)
+      )
+      result = cursor.fetchone()
+      
+      if result:
+          return {
+              'product_name': result[0],
+              'search_queries': json.loads(result[1]),
+              'include_keywords': json.loads(result[2]),  # ✅ Добавляем обязательные слова
+              'exclude_keywords': json.loads(result[3]),
+          }
+      return None
 
     def get_all_search_configs(self):
-        """Получает все активные конфиги для поиска"""
+        """Получает все активные конфиги для поиска с обязательными словами"""
         cursor = self.conn.cursor()
         cursor.execute(
-            'SELECT product_type, product_name, search_queries, exclude_keywords FROM search_configs WHERE is_active = 1'
+            'SELECT product_type, product_name, search_queries, include_keywords, exclude_keywords FROM search_configs WHERE is_active = 1'
         )
         
         configs = {}
@@ -522,7 +571,8 @@ class Database:
             configs[row[0]] = {
                 'product_name': row[1],
                 'search_queries': json.loads(row[2]),
-                'exclude_keywords': json.loads(row[3]),
+                'include_keywords': json.loads(row[3]),  # ✅ Добавляем обязательные слова
+                'exclude_keywords': json.loads(row[4]),
             }
         return configs
 
@@ -540,7 +590,8 @@ class Database:
                 'product_type': result[0],
                 'product_name': result[1],
                 'search_queries': json.loads(result[2]),
-                'exclude_keywords': json.loads(result[3]),
+                'include_keywords': json.loads(result[3]),
+                'exclude_keywords': json.loads(result[4]),
             }
         return None
 

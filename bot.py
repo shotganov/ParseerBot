@@ -59,96 +59,7 @@ async def get_products_by_config(session, config):
     product_ids = set()
     
     search_queries = config['search_queries']
-    exclude_keywords = config['exclude_keywords']
-    
-    for search_query in search_queries:
-        empty_page_count = 0
-        max_empty_pages = 2
-        count_not_find_products = 0
-        max_count_not_find_products = 2
-        
-        for page in range(1, 100):
-            try:
-                url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={search_query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
-               
-                print(f"🔍 Запрос: {search_query}, страница {page}")
-                
-                async with session.get(url, headers=get_headers_from_db(), timeout=10) as response:
-                    response_text = await response.text()
-                    
-                    if not response_text.strip():
-                        print(f"⚠️ Получена пустая страница для {search_query}, страница {page}")
-                        empty_page_count += 1
-                        if empty_page_count >= max_empty_pages:
-                            print(f"🛑 Получено {empty_page_count} пустых страниц подряд, завершаем цикл для '{search_query}'")
-                            break
-                        continue
-                    
-                    try:
-                        data = json.loads(response_text)
-                    except json.JSONDecodeError as e:
-                        print(f"❌ Ошибка парсинга JSON для {search_query}: {e}")
-                        empty_page_count += 1
-                        if empty_page_count >= max_empty_pages:
-                            print(f"🛑 Получено {empty_page_count} ошибок JSON подряд, завершаем цикл для '{search_query}'")
-                            break
-                        continue
-                
-                empty_page_count = 0
-                
-                if max_count_not_find_products == count_not_find_products:
-                    print(f"🛑 В ответе нет ключа 'products' для запроса более {max_count_not_find_products} раз")
-                    break
-                
-                if "products" not in data:
-                    print(f"❌ В ответе нет ключа 'products' для запроса: {search_query}")
-                    count_not_find_products += 1
-                    continue
-                
-                count_not_find_products = 0
-                if not data["products"]:
-                    print(f"ℹ️ Нет товаров на странице {page} для запроса: {search_query}")
-                    break
-                
-                products_before = len(products)
-                for product in data["products"]:
-                    if product["id"] not in product_ids:
-                        product_ids.add(product["id"])
-                        products.append(product)
-                
-                products_added = len(products) - products_before
-                print(f"✅ Найдено {len(data['products'])} товаров, добавлено {products_added} новых для '{search_query}'")
-                
-                if products_added == 0:
-                    print(f"🛑 Не добавлено новых товаров на странице {page}, завершаем пагинацию для '{search_query}'")
-                    break
-                
-                if len(data["products"]) < 100:
-                    print(f"ℹ️ Меньше 100 товаров на странице {page}, завершаем пагинацию для '{search_query}'")
-                    break
-                    
-            except asyncio.TimeoutError:
-                print(f"⏰ Таймаут при запросе: {search_query}, страница {page}")
-                empty_page_count += 1
-                if empty_page_count >= max_empty_pages:
-                    print(f"🛑 Получено {empty_page_count} таймаутов подряд, завершаем цикл для '{search_query}'")
-                    break
-            except Exception as e:
-                print(f"❌ Ошибка при парсинге {search_query}: {e}")
-                empty_page_count += 1
-                if empty_page_count >= max_empty_pages:
-                    print(f"🛑 Получено {empty_page_count} ошибок подряд, завершаем цикл для '{search_query}'")
-                    break
-    
-    print(f"📦 Всего найдено {len(products)} товаров для конфига")
-    return products
-
-async def get_products_by_config(session, config):
-    """Универсальная функция для получения товаров по конфигу из БД"""
-    products = []
-    product_ids = set()
-    
-    search_queries = config['search_queries']
+    include_keywords = config['include_keywords']  # ✅ Получаем обязательные слова
     exclude_keywords = config['exclude_keywords']
     
     for search_query in search_queries:
@@ -204,8 +115,28 @@ async def get_products_by_config(session, config):
                 products_before = len(products)
                 for product in data["products"]:
                     if product["id"] not in product_ids:
-                        product_ids.add(product["id"])
-                        products.append(product)
+                        # ✅ Проверяем обязательные слова перед добавлением
+                        name_lower = str(product["name"]).lower()
+                        
+                        # Проверяем обязательные слова - ВСЕ должны присутствовать
+                        should_include = True
+                        for keyword in include_keywords:
+                            if keyword.lower() not in name_lower:
+                                should_include = False
+                                break
+                        
+                        # Проверяем исключения - НИ ОДНО не должно присутствовать
+                        should_exclude = False
+                        for keyword in exclude_keywords:
+                            if keyword.lower() in name_lower:
+                                should_exclude = True
+                                break
+                        
+                        # Добавляем товар только если проходит обе проверки
+                        if should_include and not should_exclude:
+                            product_ids.add(product["id"])
+                            products.append(product)
+
                 
                 products_added = len(products) - products_before
                 print(f"✅ Найдено {len(data['products'])} товаров, добавлено {products_added} новых для '{search_query}'")
@@ -234,12 +165,39 @@ async def get_products_by_config(session, config):
     print(f"📦 Всего найдено {len(products)} товаров для конфига")
     return products
 
+def should_include_by_config(name_lower, include_keywords):
+    """✅ Проверяет обязательные слова по конфигу из БД"""
+    for keyword in include_keywords:
+        if keyword.lower() not in name_lower:
+            return False
+    return True
+
 def should_exclude_by_config(name_lower, exclude_keywords):
-    """Проверяет исключения по конфигу из БД"""
+    """❌ Проверяет исключения по конфигу из БД"""
     for keyword in exclude_keywords:
-        if keyword in name_lower:
+        if keyword.lower() in name_lower:
             return True
     return False
+
+def should_include_product(name_lower, config):
+    """
+    ✅ Универсальная проверка товара по конфигу
+    Возвращает True если товар подходит
+    """
+    include_keywords = config.get('include_keywords', [])
+    exclude_keywords = config.get('exclude_keywords', [])
+    
+    # Проверяем обязательные слова - ВСЕ должны присутствовать
+    for keyword in include_keywords:
+        if keyword.lower() not in name_lower:
+            return False
+    
+    # Проверяем исключения - НИ ОДНО не должно присутствовать
+    for keyword in exclude_keywords:
+        if keyword.lower() in name_lower:
+            return False
+    
+    return True
 
 async def get_detailed_product_price(session, product_id, discount_percent=7):
     """Универсальная функция получения детальной цены товара"""
@@ -359,15 +317,14 @@ async def filter_products_for_user(application, user_id, product_type, max_price
         print(f"❌ Конфиг для {product_type} не найден")
         return
     
-    exclude_keywords = config['exclude_keywords']
-    
     for product in products:
         name = str(product["name"])
+        name_lower = name.lower()
         base_price = math.floor(product['sizes'][0]['price']['product'])/100
         initial_discounted_price = base_price * ((100 - discount_percent) / 100)
         
-        # Проверяем исключения по конфигу из БД
-        if should_exclude_by_config(name.lower(), exclude_keywords):
+        # ✅ Проверяем товар по конфигу (обязательные слова + исключения)
+        if not should_include_product(name_lower, config):
             continue
         
         if initial_discounted_price < max_price and initial_discounted_price > min_price:
