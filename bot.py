@@ -245,36 +245,38 @@ async def send_product_messages(application, user_id, products, title, max_produ
             message += f"*Часть {chunk_index + 1} из {len(product_chunks)}*\n\n"
         
         for product in product_chunk:
-          # Ссылка в названии
-          product_link = f"[{product['name']}]({product['link']})"
-          
-          if product['price_dropped'] and product['previous_price']:
-              price_drop = product['previous_price'] - product['price']
-              price_drop_percent = (price_drop / product['previous_price']) * 100
-              message += f"🔵 {product_link}\n"
+            # Получаем количество товара, если доступно
+            quantity = product.get('totalQuantity', '?')
+            
+            # Ссылка в названии с количеством товара
+            product_link = f"[{product['name']}]({product['link']})"
+            
+            if product['price_dropped'] and product['previous_price']:
+                price_drop = product['previous_price'] - product['price']
+                price_drop_percent = (price_drop / product['previous_price']) * 100
+                message += f"🔵 {product_link}\n"
 
-              # Добавляем рейтинг продавца, если есть
-              if product.get('supplier_rating') is not None:
-                  rating = product['supplier_rating']
-                  message += f"⭐ Рейтинг продавца: {rating}\n"
-              elif product.get('supplier'):
-                  message += f"🏪 Продавец: {product['supplier']}\n"
+                # Добавляем рейтинг продавца, если есть
+                if product.get('supplier_rating') is not None:
+                    rating = product['supplier_rating']
+                    message += f"⭐ Рейтинг продавца: {rating}\n"
+                elif product.get('supplier'):
+                    message += f"🏪 Продавец: {product['supplier']}\n"
 
-              message += f"💰 Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
-              message += f"📉 Снижение: {price_drop:,} руб. ({price_drop_percent:.1f}%)\n".replace(',', ' ')
-          else:
-              message += f"🔵 {product_link}\n"
-              # Добавляем рейтинг продавца, если есть
-              if product.get('supplier_rating') is not None:
-                  rating = product['supplier_rating']
-                  message += f"⭐ Рейтинг продавца: {rating}\n"
-              elif product.get('supplier'):
-                  message += f"🏪 Продавец: {product['supplier']}\n"
+                message += f"💰 Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
+                message += f"📉 Снижение: {price_drop:,} руб. ({price_drop_percent:.1f}%)\n".replace(',', ' ')
+            else:
+                message += f"🔵 {product_link} ({quantity} шт)\n"
+                # Добавляем рейтинг продавца, если есть
+                if product.get('supplier_rating') is not None:
+                    rating = product['supplier_rating']
+                    message += f"⭐ Рейтинг продавца: {rating}\n"
+                elif product.get('supplier'):
+                    message += f"🏪 Продавец: {product['supplier']}\n"
 
-              message += f"💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
+                message += f"💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
               
-          
-          message += "\n"
+            message += "\n"
         
         # Добавляем информацию об общем количестве товаров в последнем сообщении
         if chunk_index == len(product_chunks) - 1 and len(products) > len(product_chunk):
@@ -296,7 +298,6 @@ async def send_product_messages(application, user_id, products, title, max_produ
             print(f"❌ Ошибка отправки сообщения пользователю {user_id}: {e}")
     
     print(f"✅ Отправлено {len(product_chunks)} сообщений пользователю {user_id} о {len(products)} товарах")
-
 
 async def filter_products_for_user(application, user_id, product_type, max_price, 
                                  discount_percent, price_threshold, products, session):
@@ -349,7 +350,8 @@ async def filter_products_for_user(application, user_id, product_type, max_price
                         'price_dropped': price_dropped,
                         'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx",
                         'supplier': product.get('supplier', '—'),
-                        'supplier_rating': product.get('supplierRating', None)
+                        'supplier_rating': product.get('supplierRating', None),
+                        'totalQuantity': product.get('totalQuantity', '?')
                     })
     
     # Отправка сообщений
@@ -530,7 +532,8 @@ async def check_all_prices(application):
                                   'price_dropped': True,
                                   'link': f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx",
                                   'supplier': '—',  # для кастомных ссылок — неизвестен
-                                  'supplier_rating': None
+                                  'supplier_rating': None,
+                                  'totalQuantity': '?'
                               })
                     if found:
                         await send_product_messages(
