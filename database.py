@@ -229,7 +229,7 @@ class Database:
                   "playstation 5 slim"
               ], ensure_ascii=False),
               'include_keywords': json.dumps([  # ✅ Обязательные слова
-                  "playstation", "5", "slim"
+                  "5", "slim"
               ], ensure_ascii=False),
               'exclude_keywords': json.dumps([
                   "digital", "digital edition", "digital version",
@@ -246,10 +246,10 @@ class Database:
                   "playstation 5 pro"
               ], ensure_ascii=False),
               'include_keywords': json.dumps([  # ✅ Обязательные слова
-                  "playstation", "5", "pro"
+                  "5", "pro"
               ], ensure_ascii=False),
               'exclude_keywords': json.dumps([
-                  "4 slim", "4 pro", "5 slim", "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
+                  "4 slim", "4 pro", "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный", "ssd-диск", "витринная"
               ], ensure_ascii=False),
           }
