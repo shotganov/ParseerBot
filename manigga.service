@@ -6,9 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/cloud/ParseerBot
+WorkingDirectory=/root/cloud/ParseerBot
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/env python3 bot.py
+ExecStart=/root/cloud/ParseerBot/env/bin/python3 bot.py
 Restart=on-failure
 RestartSec=5
 
