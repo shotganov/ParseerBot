@@ -1,0 +1,29 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update VPS and restart service
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: '22'
+          script: |
+            set -euo pipefail
+            cd /cloud/ParseerBot
+            git fetch --all --prune
+            git reset --hard origin/main
+            git pull --ff-only origin main
+            env/bin/pip install -r requirements.txt
+            sudo systemctl restart manigga.service
