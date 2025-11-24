@@ -1,0 +1,16 @@
+[Unit]
+Description=ParserBot Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/cloud/ParseerBot
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/env python3 bot.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
