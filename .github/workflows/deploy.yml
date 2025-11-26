@@ -21,7 +21,7 @@ jobs:
           port: '22'
           script: |
             set -euo pipefail
-            cd /cloud/ParseerBot
+            cd /root/cloud/ParseerBot
             git fetch --all --prune
             git reset --hard origin/main
             git pull --ff-only origin main
