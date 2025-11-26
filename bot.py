@@ -15,13 +15,13 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-#хуй
+
 BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
 #BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 400
 COUNTER = 0
-MAX_COUNTER = 0
+MAX_COUNTER = 3
 
 def get_headers_from_db():
     token = db.get_system_config("wb_authorization", None)
