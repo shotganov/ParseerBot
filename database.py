@@ -5,7 +5,7 @@ import json
 
 class Database:
     def __init__(self):
-        self.conn = sqlite3.connect('database_n.db', check_same_thread=False)
+        self.conn = sqlite3.connect('database_new.db', check_same_thread=False)
         self.create_tables()
         self.initialize_iphone_configs()
 
