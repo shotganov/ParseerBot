@@ -16,10 +16,10 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
-#BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
+#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
-IPHONE_16_MIN_THRESHOLD = 399
+IPHONE_16_MIN_THRESHOLD = 10
 COUNTER = 0
 MAX_COUNTER = 3
 
@@ -68,7 +68,7 @@ async def get_products_by_config(session, config):
         count_not_find_products = 0
         max_count_not_find_products = 2
         
-        for page in range(1, 10):
+        for page in range(1, 2):
             try:
 
                 url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={search_query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
@@ -165,20 +165,6 @@ async def get_products_by_config(session, config):
     print(f"📦 Всего найдено {len(products)} товаров для конфига")
     return products
 
-def should_include_by_config(name_lower, include_keywords):
-    """✅ Проверяет обязательные слова по конфигу из БД"""
-    for keyword in include_keywords:
-        if keyword.lower() not in name_lower:
-            return False
-    return True
-
-def should_exclude_by_config(name_lower, exclude_keywords):
-    """❌ Проверяет исключения по конфигу из БД"""
-    for keyword in exclude_keywords:
-        if keyword.lower() in name_lower:
-            return True
-    return False
-
 def should_include_product(name_lower, config):
     """
     ✅ Универсальная проверка товара по конфигу
@@ -199,7 +185,7 @@ def should_include_product(name_lower, config):
     
     return True
 
-async def get_detailed_product_price(session, product_id, discount_percent=7):
+async def get_detailed_product_price(session, product_id, discount_percent=10):
     """Универсальная функция получения детальной цены товара"""
     try:
         discount_multiplier = (100 - discount_percent) / 100
@@ -454,7 +440,7 @@ async def check_all_prices(application):
             users_with_prices = {}
             for user_id in active_users:
                 user_products = db.get_all_user_product_prices(user_id)
-                user_prices = {pt: data['price'] for pt, data in user_products.items() if data['active']}
+                user_prices = {pt: data['price'] for pt, data in user_products.items()}
                 if user_prices:
                     disc, thr = db.get_user_settings(user_id)
                     users_with_prices[user_id] = {'prices': user_prices, 'discount': disc, 'threshold': thr}
@@ -469,8 +455,6 @@ async def check_all_prices(application):
                     all_products[product_type] = products
                     print(f"✅ Найдено {len(products)} товаров для {product_type}")
                     
-
-
             # Проверка токена через iPhone 16
             await check_wb_token_health(application, all_products)
 
@@ -479,6 +463,7 @@ async def check_all_prices(application):
             custom_product_ids = set()
             for user_id in active_users:
                 links = db.get_user_custom_links(user_id)  # возвращает {product_id: initial_price}
+                print(links)
                 if links:
                     custom_links_by_user[user_id] = links
                     custom_product_ids.update(links.keys())
@@ -592,66 +577,68 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"❌ Ошибка при отправке сообщения: {e}")
 
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает главное меню"""
-    user_id = update.effective_user.id
-    discount_percent, price_threshold = db.get_user_settings(user_id)
+# async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Показывает главное меню"""
+#     user_id = update.effective_user.id
+#     discount_percent, price_threshold = db.get_user_settings(user_id)
     
-    # Получаем ВСЕ товары пользователя (включая неактивные)
-    user_products = db.get_all_user_product_prices(user_id)
+#     # Получаем ВСЕ товары пользователя (включая неактивные)
+#     user_products = db.get_all_user_product_prices(user_id)
     
-    # Получаем статус поиска
-    is_search_active = db.get_user_search_active(user_id)
-    search_status_icon = "🟢" if is_search_active else "🔴"
-    search_status_text = "активен" if is_search_active else "остановлен"
+#     # Получаем статус поиска
+#     is_search_active = db.get_user_search_active(user_id)
+#     search_status_icon = "🟢" if is_search_active else "🔴"
+#     search_status_text = "активен" if is_search_active else "остановлен"
     
-    # Формируем информацию о установленных ценах
-    price_info = []
+#     # Формируем информацию о установленных ценах
+#     price_info = []
 
-    # 1. Стандартные товары
-    user_products = db.get_all_user_product_prices(user_id)
-    product_names = {
-        'iphone_16_128': 'iPhone 16 128Gb',
-        'iphone_16_256': 'iPhone 16 256Gb',
-        'iphone_16_pro_128': 'iPhone 16 Pro 128Gb',
-        'iphone_16_pro_256': 'iPhone 16 Pro 256Gb',
-        'iphone_16_pro_max': 'iPhone 16 Pro Max 256Gb',
-        'ps5_slim_disk': 'PlayStation 5 Slim',
-        'ps5_pro': 'PlayStation 5 Pro',
-    }
-    for product_type, product_data in user_products.items():
-        price = product_data['price']
-        if price > 0:
-            product_name = product_names.get(product_type, product_type)
-            price_info.append(f"• {product_name}: {price:,} руб.".replace(',', ' '))
+#     # 1. Стандартные товары
+#     user_products = db.get_all_user_product_prices(user_id)
+#     product_names = {
+#         'iphone_16_128': 'iPhone 16 128Gb',
+#         'iphone_16_256': 'iPhone 16 256Gb',
+#         'iphone_16_pro_128': 'iPhone 16 Pro 128Gb',
+#         'iphone_16_pro_256': 'iPhone 16 Pro 256Gb',
+#         'iphone_16_pro_max': 'iPhone 16 Pro Max 256Gb',
+#         'ps5_slim_disk': 'PlayStation 5 Slim',
+#         'ps5_pro': 'PlayStation 5 Pro',
+#     }
+#     print(f"------------\n {user_products} ------------\n")
+#     for product_type, product_data in user_products.items():
+#         price = product_data['price']
+#         if price > 0:
+#             product_name = product_names.get(product_type, product_type)
+#             price_info.append(f"• {product_name}: {price:,} руб.".replace(',', ' '))
 
-    all_custom_links = db.get_all_user_custom_links(user_id)
-    for product_id, data in all_custom_links.items():
-        price_info.append(f"• Товар WB (артикул {product_id}): {data['price']:,} руб.".replace(',', ' '))
+#     all_custom_links = db.get_all_user_custom_links(user_id)
+#     print(f"------------\n {all_custom_links} ------------\n")
+#     for product_id, data in all_custom_links.items():
+#         price_info.append(f"• Товар WB (артикул {product_id}): {data['price']:,} руб.".replace(',', ' '))
 
-    if not price_info:
-        price_info = ["Не установлены"]
+#     if not price_info:
+#         price_info = ["Не установлены"]
         
-    keyboard = [
-        [InlineKeyboardButton("🤖 Парсер", callback_data="parser_menu")],
-        [InlineKeyboardButton("⚙️ Настройки", callback_data="settings_menu")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+#     keyboard = [
+#         [InlineKeyboardButton("🤖 Парсер", callback_data="parser_menu")],
+#         [InlineKeyboardButton("⚙️ Настройки", callback_data="settings_menu")],
+#     ]
+#     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    message = (
-        f"{search_status_icon} **Статус поиска:** {search_status_text}\n\n"
-        "⚙️ **Ваши текущие настройки:**\n"
-        f"💸 Скидка WB: {discount_percent}%\n"
-        f"📉 Авт. порог: {price_threshold}%\n\n"
-        "📦 **Отслеживаемые товары:**\n" +
-        "\n".join(f"• {info}" for info in price_info) +
-        "\n\n💡 **Выберите раздел:**"
-    )
+#     message = (
+#         f"{search_status_icon} **Статус поиска:** {search_status_text}\n\n"
+#         "⚙️ **Ваши текущие настройки:**\n"
+#         f"💸 Скидка WB: {discount_percent}%\n"
+#         f"📉 Авт. порог: {price_threshold}%\n\n"
+#         "📦 **Отслеживаемые товары:**\n" +
+#         "\n".join(f"• {info}" for info in price_info) +
+#         "\n\n💡 **Выберите раздел:**"
+#     )
     
-    if update.callback_query:
-        await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
-    else:
-        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+#     if update.callback_query:
+#         await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+#     else:
+#         await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню настроек (с кнопкой токена для админа)"""
@@ -737,7 +724,7 @@ async def show_products_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def show_products_items_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню товаров (iPhone и PS5)"""
     keyboard = [
-        [InlineKeyboardButton("📱 iPhone 16", callback_data="iphone_menu")],
+        [InlineKeyboardButton("📱 iPhone", callback_data="show_iphone_menu")],
         [InlineKeyboardButton("🎮 PlayStation", callback_data="ps5_menu")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_products")]
     ]
@@ -867,7 +854,7 @@ async def show_delete_custom_menu(update: Update, context: ContextTypes.DEFAULT_
     
     await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def show_iphone_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_iphone_16_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню выбора моделей iPhone"""
     keyboard = [
         [InlineKeyboardButton("iPhone 16 128Gb", callback_data="set_iphone_16_128")],
@@ -875,7 +862,7 @@ async def show_iphone_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("iPhone 16 Pro 128Gb", callback_data="set_iphone_16_pro_128")],
         [InlineKeyboardButton("iPhone 16 Pro 256Gb", callback_data="set_iphone_16_pro_256")],
         [InlineKeyboardButton("iPhone 16 Pro Max 256Gb", callback_data="set_iphone_16_pro_max")],
-        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_products_items")]
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone_items")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -886,6 +873,39 @@ async def show_iphone_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
+async def show_iphone_17_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню выбора моделей iPhone"""
+    keyboard = [
+        [InlineKeyboardButton("iPhone 17 256Gb", callback_data="set_iphone_17_256")],
+        [InlineKeyboardButton("iPhone 17 Pro 256Gb", callback_data="set_iphone_17_pro_256")],
+        [InlineKeyboardButton("iPhone 17 Pro Max 256Gb", callback_data="set_iphone_17_pro_max_256")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone_items")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = (
+        "📱 **Выбор модели iPhone**\n\n"
+        "Выберите конкретную модель для установки цены:"
+    )
+    
+    await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def show_iphone_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню выбора моделей iPhone"""
+    keyboard = [
+        [InlineKeyboardButton("iPhone 16", callback_data="iphone_16_menu")],
+        [InlineKeyboardButton("iPhone 17", callback_data="iphone_17_menu")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_products_items")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = (
+        "📱 **Выбор модели iPhone**\n\n"
+        "Выберите конкретную модель для установки цены:"
+    )
+    
+    await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
 async def show_ps5_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню для PS5"""
     keyboard = [
@@ -904,7 +924,7 @@ async def show_ps5_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик для кнопки Меню под клавиатурой"""
-    await show_main_menu(update, context)
+    await show_menu(update, context)
 
 # Создаем Reply клавиатуру (постоянная клавиатура внизу)
 def get_main_reply_keyboard():
@@ -941,7 +961,7 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for product_type, product_data in user_products.items():
         price = product_data['price']
         if price > 0:
-            product_name = product_names.get(product_type, product_type)
+            product_name = product_data['product_name']
             price_info.append(f"• {product_name}: {price:,} руб.".replace(',', ' '))
 
     all_custom_links = db.get_all_user_custom_links(user_id)
@@ -992,7 +1012,6 @@ async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TY
         # Показываем главное меню
         await show_menu(update, context)
 
-
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на inline-кнопки"""
     query = update.callback_query
@@ -1006,8 +1025,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_products = db.get_all_user_product_prices(user_id)
         custom_links = db.get_all_user_custom_links(user_id)
         
-        active_products_count = sum(1 for product_data in user_products.values() if product_data['price'] > 0)
-        active_custom_count = sum(1 for link_data in custom_links.values() if link_data['active'])
+        active_products_count = len(user_products)
+        active_custom_count = len(custom_links)
         total_tracked_items = active_products_count + active_custom_count
         
         if total_tracked_items == 0:
@@ -1089,9 +1108,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "products_menu":
         await show_products_menu(update, context)
     
-    # Категории товаров
-    elif data == "iphone_menu":
+    elif data == "show_iphone_menu":
         await show_iphone_menu(update, context)
+
+    elif data == "iphone_16_menu":
+        await show_iphone_16_menu(update, context)
+    
+    elif data == "iphone_17_menu":
+        await show_iphone_17_menu(update, context)
     
     elif data == "ps5_menu":
         await show_ps5_menu(update, context)
@@ -1123,6 +1147,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Установка цен для iPhone
     elif data == "set_iphone_16_128":
+        print("Устанавливаю цену для айфона 16 128 гб", user_id)
         db.set_waiting_for_price(user_id, 1, 'iphone_16_128')
         
         keyboard = [
@@ -1140,6 +1165,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif data == "set_iphone_16_256":
+        print("Устанавливаю цену для айфона 16 256 гб", user_id)
         db.set_waiting_for_price(user_id, 1, 'iphone_16_256')
         
         keyboard = [
@@ -1206,6 +1232,57 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
+
+    elif data == "set_iphone_17_256":
+      db.set_waiting_for_price(user_id, 1, 'iphone_17_256')
+      
+      keyboard = [
+          [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone")]
+      ]
+      reply_markup = InlineKeyboardMarkup(keyboard)
+      
+      await query.edit_message_text(
+          "📱 **Установка цены для iPhone 17 256Gb**\n\n"
+          "Введите максимальную цену в рублях (только цифры):\n\n"
+          "💡 **Пример:** 70000\n\n"
+          "🔍 Бот будет искать iPhone 17 256Gb в диапазоне согласно вашему автоматическому порогу.",
+          reply_markup=reply_markup,
+          parse_mode='Markdown'
+      )
+    
+    elif data == "set_iphone_17_pro_256":
+      db.set_waiting_for_price(user_id, 1, 'iphone_17_pro_256')
+      
+      keyboard = [
+          [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone")]
+      ]
+      reply_markup = InlineKeyboardMarkup(keyboard)
+      
+      await query.edit_message_text(
+          "📱 **Установка цены для iPhone 17 Pro 256Gb**\n\n"
+          "Введите максимальную цену в рублях (только цифры):\n\n"
+          "💡 **Пример:** 100000\n\n"
+          "🔍 Бот будет искать iPhone 17 Pro 256Gb в диапазоне согласно вашему автоматическому порогу.",
+          reply_markup=reply_markup,
+          parse_mode='Markdown'
+      )
+    
+    elif data == "set_iphone_17_pro_max_256":
+      db.set_waiting_for_price(user_id, 1, 'iphone_17_pro_max_256')
+      
+      keyboard = [
+          [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_iphone")]
+      ]
+      reply_markup = InlineKeyboardMarkup(keyboard)
+      
+      await query.edit_message_text(
+          "📱 **Установка цены для iPhone 17 Pro Max 256Gb**\n\n"
+          "Введите максимальную цену в рублях (только цифры):\n\n"
+          "💡 **Пример:** 120000\n\n"
+          "🔍 Бот будет искать iPhone 17 Pro Max 256Gb в диапазоне согласно вашему автоматическому порогу.",
+          reply_markup=reply_markup,
+          parse_mode='Markdown'
+      )
 
     # Установка цены для PS5
     elif data == "set_ps5_slim_disk":
@@ -1285,6 +1362,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "back_to_products_items":
       await show_products_items_menu(update, context)
 
+    elif data == "back_to_iphone_items":
+      await show_iphone_menu(update, context)
+
     elif data == "back_to_main":
         await show_menu(update, context)
 
@@ -1296,7 +1376,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "back_to_iphone":
         # Очищаем состояние ожидания ввода и возвращаем в меню iPhone
         db.clear_waiting_for_price(user_id)
-        await show_iphone_menu(update, context)
+        await show_iphone_16_menu(update, context)
 
     elif data == "back_to_ps5":
         # Очищаем состояние ожидания ввода и возвращаем в меню PS5
@@ -1474,8 +1554,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode='Markdown'
                     )
             
-            elif product_type in ['iphone_16_128', 'iphone_16_256', 'iphone_16_pro_128', 
-                                'iphone_16_pro_256', 'iphone_16_pro_max', 'ps5_slim_disk', 'ps5_pro']:
+            elif product_type in ['iphone_16_128', 'iphone_16_256', 'iphone_16_pro_128', 'iphone_16_pro_256', 'iphone_16_pro_max', 
+                                  'iphone_17_256', 'iphone_17_pro_256', 'iphone_17_pro_max_256', 'ps5_slim_disk', 'ps5_pro']:
                 if value <= 0:
                     keyboard = [
                         [InlineKeyboardButton("⬅️ Назад", callback_data=f"back_to_{'iphone' if 'iphone' in product_type else 'ps5'}")]
@@ -1539,7 +1619,7 @@ def main():
     
     job_queue = application.job_queue
     if job_queue:
-        job_queue.run_repeating(price_checker_job, interval=30, first=10)
+        job_queue.run_repeating(price_checker_job, interval=20, first=10)
         print("✅ JobQueue запущен")
     else:
         print("❌ JobQueue не доступен, используем альтернативный метод")
