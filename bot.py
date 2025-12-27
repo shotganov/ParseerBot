@@ -16,7 +16,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
 #BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 10
@@ -462,8 +462,7 @@ async def check_all_prices(application):
             custom_links_by_user = {}
             custom_product_ids = set()
             for user_id in active_users:
-                links = db.get_user_custom_links(user_id)  # возвращает {product_id: initial_price}
-                print(links)
+                links = db.get_user_custom_links(user_id)
                 if links:
                     custom_links_by_user[user_id] = links
                     custom_product_ids.update(links.keys())
