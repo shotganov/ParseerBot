@@ -1618,14 +1618,14 @@ def main():
     
     job_queue = application.job_queue
     if job_queue:
-        job_queue.run_repeating(price_checker_job, interval=20, first=10)
+        job_queue.run_repeating(price_checker_job, interval=10, first=10)
         print("✅ JobQueue запущен")
     else:
         print("❌ JobQueue не доступен, используем альтернативный метод")
         async def run_checks():
             while True:
                 await check_all_prices(application)
-                await asyncio.sleep(30)
+                await asyncio.sleep(10)
         asyncio.create_task(run_checks())
     
     print("🤖 Бот запущен!")

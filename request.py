@@ -1,4 +1,4 @@
-# import requests
+import requests
 
 # # # # Создаем строку (пока query = захардкоженое значение)
 # query = "iphone 16"
@@ -49,98 +49,97 @@
 # for i in range(len(links)):
 #   print(links[i])
 
-import requests
 
-HEADERS = {
-    "authority": "u-card.wb.ru",
-    "authorization" : "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjE3NzEzNTcsInVzZXIiOiI1NzMxNjk0NCIsInNoYXJkX2tleSI6IjE2IiwiY2xpZW50X2lkIjoid2IiLCJzZXNzaW9uX2lkIjoiODUzZTEwYTE4NGRmNDc5NmEyNjYyNzRiY2ZjMzMzN2UiLCJ2YWxpZGF0aW9uX2tleSI6IjM5ODA3OGQ0N2VlZTk4NzgxNjQ4MTg3ZWE3ZDY3ZDE0ZmM3OGZlYWFjYjljNWI2Y2U4YjU4NTlmMGM0YTVhNDAiLCJwaG9uZSI6InhMK29IODloM2Q0OFlpTnVIUVpaK3c9PSIsInVzZXJfcmVnaXN0cmF0aW9uX2R0IjoxNjg1Mzg3MzI0LCJ2ZXJzaW9uIjoyfQ.AUnDL_lNpQRFaFBc_UjzD0ChFk8v0q_7hfZ_qp3OAgitskB7x7MbVvawUXh5wL11F3dHGyRpJH1UomPdtRbvR_-pCLsgJRRoDRnYmxGM1sw4ItLv1Ez1RiXamtzR3-aebJ0Xgg_wuqDkyzEi6VWd_QzIWtzC1LGpxxsMKL3LMIATQwjoWc7B6b4uGzRMVqM9XpCXXzGNlwwi5B4vzPkDVBtWEmxJU1pQUlk72jxdPm_uYVeLsvhHZvhmtVyYcIiD17EncnlLcEBvyfmSxl6NN8j5uOn6_7XJ9u1ZzeD8dJE0OOiWIe43kpYW5Sr6x9LGPBFcYTT4mwTXk7CTDXnyPg",
-    "accept": "*/*",
-    "accept-encoding": "gzip, deflate, br, zstd",
-    "accept-language": "ru,en;q=0.9,en-GB;q=0.8,en-US;q=0.7",
-    "origin": "https://www.wildberries.ru",
-    "priority": "u=1, i",
-    "referer": "https://www.wildberries.ru/",
-    "sec-ch-ua": '"Microsoft Edge";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "cross-site",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
-}
+# HEADERS = {
+#     "authority": "u-card.wb.ru",
+#     "authorization" : "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjE3NzEzNTcsInVzZXIiOiI1NzMxNjk0NCIsInNoYXJkX2tleSI6IjE2IiwiY2xpZW50X2lkIjoid2IiLCJzZXNzaW9uX2lkIjoiODUzZTEwYTE4NGRmNDc5NmEyNjYyNzRiY2ZjMzMzN2UiLCJ2YWxpZGF0aW9uX2tleSI6IjM5ODA3OGQ0N2VlZTk4NzgxNjQ4MTg3ZWE3ZDY3ZDE0ZmM3OGZlYWFjYjljNWI2Y2U4YjU4NTlmMGM0YTVhNDAiLCJwaG9uZSI6InhMK29IODloM2Q0OFlpTnVIUVpaK3c9PSIsInVzZXJfcmVnaXN0cmF0aW9uX2R0IjoxNjg1Mzg3MzI0LCJ2ZXJzaW9uIjoyfQ.AUnDL_lNpQRFaFBc_UjzD0ChFk8v0q_7hfZ_qp3OAgitskB7x7MbVvawUXh5wL11F3dHGyRpJH1UomPdtRbvR_-pCLsgJRRoDRnYmxGM1sw4ItLv1Ez1RiXamtzR3-aebJ0Xgg_wuqDkyzEi6VWd_QzIWtzC1LGpxxsMKL3LMIATQwjoWc7B6b4uGzRMVqM9XpCXXzGNlwwi5B4vzPkDVBtWEmxJU1pQUlk72jxdPm_uYVeLsvhHZvhmtVyYcIiD17EncnlLcEBvyfmSxl6NN8j5uOn6_7XJ9u1ZzeD8dJE0OOiWIe43kpYW5Sr6x9LGPBFcYTT4mwTXk7CTDXnyPg",
+#     "accept": "*/*",
+#     "accept-encoding": "gzip, deflate, br, zstd",
+#     "accept-language": "ru,en;q=0.9,en-GB;q=0.8,en-US;q=0.7",
+#     "origin": "https://www.wildberries.ru",
+#     "priority": "u=1, i",
+#     "referer": "https://www.wildberries.ru/",
+#     "sec-ch-ua": '"Microsoft Edge";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
+#     "sec-ch-ua-mobile": "?0",
+#     "sec-ch-ua-platform": '"Windows"',
+#     "sec-fetch-dest": "empty",
+#     "sec-fetch-mode": "cors",
+#     "sec-fetch-site": "cross-site",
+#     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
+# }
 
 
-HEADERS_ = {
-    "authority": "u-card.wb.ru",
+# HEADERS_ = {
+#     "authority": "u-card.wb.ru",
   
-    "accept": "*/*",
-    "accept-encoding": "gzip, deflate, br, zstd",
-    "accept-language": "ru,en;q=0.9,en-GB;q=0.8,en-US;q=0.7",
-    "origin": "https://www.wildberries.ru",
-    "priority": "u=1, i",
-    "referer": "https://www.wildberries.ru/",
-    "sec-ch-ua": '"Microsoft Edge";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "cross-site",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"
-}
+#     "accept": "*/*",
+#     "accept-encoding": "gzip, deflate, br, zstd",
+#     "accept-language": "ru,en;q=0.9,en-GB;q=0.8,en-US;q=0.7",
+#     "origin": "https://www.wildberries.ru",
+#     "priority": "u=1, i",
+#     "referer": "https://www.wildberries.ru/",
+#     "sec-ch-ua": '"Microsoft Edge";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
+#     "sec-ch-ua-mobile": "?0",
+#     "sec-ch-ua-platform": '"Windows"',
+#     "sec-fetch-dest": "empty",
+#     "sec-fetch-mode": "cors",
+#     "sec-fetch-site": "cross-site",
+#     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"
+# }
 
 
 
 
-# Примеры использования:
+# # Примеры использования:
 
 
-# Разные варианты поискового запроса
-search_queries1 = [
-     "playstation 5 slim",
-      "playstation 5 slim с дисководом", 
-      "playstation 5",
-      "ps5",
-      "ps 5",
-      "ps5 blue-ray",
-      "ps 5 blue ray",
-      "игровая консоль playstation 5",
-]
+# # Разные варианты поискового запроса
+# search_queries1 = [
+#      "playstation 5 slim",
+#       "playstation 5 slim с дисководом", 
+#       "playstation 5",
+#       "ps5",
+#       "ps 5",
+#       "ps5 blue-ray",
+#       "ps 5 blue ray",
+#       "игровая консоль playstation 5",
+# ]
 
-search_queries1 = [
-    # Основные запросы
-    "iPhone 15",
-    "iPhone 15 128gb",
-    "iPhone 15 256gb", 
-    "iPhone 15 512gb",
+# search_queries1 = [
+#     # Основные запросы
+#     "iPhone 15",
+#     "iPhone 15 128gb",
+#     "iPhone 15 256gb", 
+#     "iPhone 15 512gb",
     
-    # С типом SIM
-    "iPhone 15 sim + esim",
-    "iPhone 15 dual sim",
-    "iPhone 15 две сим",
+#     # С типом SIM
+#     "iPhone 15 sim + esim",
+#     "iPhone 15 dual sim",
+#     "iPhone 15 две сим",
     
-    # С цветами
-    "iPhone 15 черный",
-    "iPhone 15 белый",
-    "iPhone 15 синий",
-    "iPhone 15 розовый",
-    "iPhone 15 зеленый",
-    "iPhone 15 желтый",
-    "iPhone 15 purple",
-    "iPhone 15 black", 
-    "iPhone 15 white",
-    "iPhone 15 blue",
-    "iPhone 15 pink",
-    "iPhone 15 green",
-    "iPhone 15 yellow",
-    "Смартфон iPhone 15"
-]
+#     # С цветами
+#     "iPhone 15 черный",
+#     "iPhone 15 белый",
+#     "iPhone 15 синий",
+#     "iPhone 15 розовый",
+#     "iPhone 15 зеленый",
+#     "iPhone 15 желтый",
+#     "iPhone 15 purple",
+#     "iPhone 15 black", 
+#     "iPhone 15 white",
+#     "iPhone 15 blue",
+#     "iPhone 15 pink",
+#     "iPhone 15 green",
+#     "iPhone 15 yellow",
+#     "Смартфон iPhone 15"
+# ]
 
-search_queries16 = [
-          "iPhone 16", "iPhone 16 128gb", "iPhone 16 sim + esim", "iPhone 16 dual sim",
-          "iPhone 16 две сим", "iPhone 16 черный", "iPhone 16 белый", "iPhone 16 синий",
-          "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", "iPhone 16 (без Ru Store)", "Смартфон iPhone 16 128 Гб (без Ru Store)", "Смартфон iPhone 16 Без RuStore и MAX", "Смартфон iPhone 16 Без MAX",
-          "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
-        ]
+# search_queries16 = [
+#           "iPhone 16", "iPhone 16 128gb", "iPhone 16 sim + esim", "iPhone 16 dual sim",
+#           "iPhone 16 две сим", "iPhone 16 черный", "iPhone 16 белый", "iPhone 16 синий",
+#           "iPhone 16 розовый", "iPhone 16 бирюзовый", "iPhone 16 purple", "iPhone 16 ultramarine", "Смартфон iPhone 16", "iPhone 16 (без Ru Store)", "Смартфон iPhone 16 128 Гб (без Ru Store)", "Смартфон iPhone 16 Без RuStore и MAX", "Смартфон iPhone 16 Без MAX",
+#           "iPhone 16 black", "iPhone 16 white", "iPhone 16 teal", "Apple iPhone 16"
+#         ]
 
 # search_queries = [
 #     "iPhone 16 Pro", "iPhone 16 Pro 256gb", "iPhone 16 Pro sim + esim", "iPhone 16 Pro dual sim",
@@ -197,117 +196,117 @@ search_queries16 = [
 #     "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии"
 # ]
 
-iphone_exclude_keywords_16pro = [
-        "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
-        "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
-]
+# iphone_exclude_keywords_16pro = [
+#         "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
+#         "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
+# ]
 
-def get_products_by_sort(query):
-    """Получаем товары с разными сортировками"""
-    products = []
-    product_ids = set()
-    max_count = 3
-    count = 0
-    for page in range(1, 100):
-        try:
-            url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
+# def get_products_by_sort(query):
+#     """Получаем товары с разными сортировками"""
+#     products = []
+#     product_ids = set()
+#     max_count = 3
+#     count = 0
+#     for page in range(1, 100):
+#         try:
+#             url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
            
-            response = requests.get(url, headers=HEADERS, timeout=5)
-            data = response.json()
-            length = len(products)
-            for product in data["products"]:
-                if product["id"] not in product_ids:
-                    product_ids.add(product["id"])
-                    products.append(product)
+#             response = requests.get(url, headers=HEADERS, timeout=5)
+#             data = response.json()
+#             length = len(products)
+#             for product in data["products"]:
+#                 if product["id"] not in product_ids:
+#                     product_ids.add(product["id"])
+#                     products.append(product)
 
-            if length == len(products):
-                count += 1
-                if count == max_count:
-                  count = 0
-                  break
-        except Exception as e:
-            break
+#             if length == len(products):
+#                 count += 1
+#                 if count == max_count:
+#                   count = 0
+#                   break
+#         except Exception as e:
+#             break
     
-    return products
+#     return products
 
-all_products = []
-product_ids = set()
-search_querys = ["playstation 5 pro"]
-for search_query in search_querys:
-    print(f"\n=== Поиск: '{search_query}' ===")
+# all_products = []
+# product_ids = set()
+# search_querys = ["playstation 5 pro"]
+# for search_query in search_querys:
+#     print(f"\n=== Поиск: '{search_query}' ===")
     
-    products = get_products_by_sort(search_query)
+#     products = get_products_by_sort(search_query)
 
-    new_count = 0
-    for product in products:
-        if product["id"] not in product_ids:
-            product_ids.add(product["id"])
-            all_products.append(product)
-            new_count += 1
+#     new_count = 0
+#     for product in products:
+#         if product["id"] not in product_ids:
+#             product_ids.add(product["id"])
+#             all_products.append(product)
+#             new_count += 1
     
-    print(f"Добавлено: {new_count}, всего: {len(all_products)}")
+#     print(f"Добавлено: {new_count}, всего: {len(all_products)}")
 
 
-print(len(all_products))
+# print(len(all_products))
 
-print(f"\n=== ФИНАЛЬНЫЙ РЕЗУЛЬТАТ ===")
-print(f"Итого собрано товаров: {len(all_products)}")
+# print(f"\n=== ФИНАЛЬНЫЙ РЕЗУЛЬТАТ ===")
+# print(f"Итого собрано товаров: {len(all_products)}")
 
-def should_exclude_product(id, name, product_type):
-    """
-    Проверяет, нужно ли исключить товар по названию
+# def should_exclude_product(id, name, product_type):
+#     """
+#     Проверяет, нужно ли исключить товар по названию
     
-    Args:
-        name (str): Название товара
-        product_type (str): Тип товара - "iphone" или "ps5"
+#     Args:
+#         name (str): Название товара
+#         product_type (str): Тип товара - "iphone" или "ps5"
     
-    Returns:
-        bool: True если товар нужно исключить, False если оставить
-    """
+#     Returns:
+#         bool: True если товар нужно исключить, False если оставить
+#     """
     
    
-    exclude_keywords = iphone_exclude_keywords_16pro
+#     exclude_keywords = iphone_exclude_keywords_16pro
     
-    for keyword in exclude_keywords:
-        if keyword in name:
-            if id == 567722907:
-              print(keyword)
-            return True
+#     for keyword in exclude_keywords:
+#         if keyword in name:
+#             if id == 567722907:
+#               print(keyword)
+#             return True
     
-    return False
+#     return False
 
 
 
-links = []
-max_price = 73000
-for i in range(len(all_products)):
-    id = int(all_products[i]['id'])
-    name = str(all_products[i]["name"])
-    product_price = int(all_products[i]['sizes'][0]['price']['product'])/100 * 0.93 
+# links = []
+# max_price = 73000
+# for i in range(len(all_products)):
+#     id = int(all_products[i]['id'])
+#     name = str(all_products[i]["name"])
+#     product_price = int(all_products[i]['sizes'][0]['price']['product'])/100 * 0.93 
 
-    if id == 561004856:
-        print(name.lower())
-    if  should_exclude_product(id, name.lower(), "iphone"):
-        continue
+#     if id == 561004856:
+#         print(name.lower())
+#     if  should_exclude_product(id, name.lower(), "iphone"):
+#         continue
     
-    if product_price < max_price + 2000 and product_price > max_price - 10000:
-        # # Доп проверка цены 
-        req = requests.get(f"https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586361&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm={all_products[i]['id']}&ignore_stocks=true", headers=HEADERS_)
-        try:
-            req_data = req.json()
-            product_price = int(req_data['products'][0]['sizes'][0]['price']['product'])/100 * 0.93
-            #print(product_price)
-        except:
-            continue
+#     if product_price < max_price + 2000 and product_price > max_price - 10000:
+#         # # Доп проверка цены 
+#         req = requests.get(f"https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586361&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm={all_products[i]['id']}&ignore_stocks=true", headers=HEADERS_)
+#         try:
+#             req_data = req.json()
+#             product_price = int(req_data['products'][0]['sizes'][0]['price']['product'])/100 * 0.93
+#             #print(product_price)
+#         except:
+#             continue
 
-        if product_price < max_price and product_price > max_price/2:
-            links.append([f"https://www.wildberries.ru/catalog/{all_products[i]['id']}/detail.aspx", product_price])
+#         if product_price < max_price and product_price > max_price/2:
+#             links.append([f"https://www.wildberries.ru/catalog/{all_products[i]['id']}/detail.aspx", product_price])
 
-# Сортировка массива links по возрастанию цены (второй элемент в каждом подмассиве)
-links.sort(key=lambda x: x[1])
+# # Сортировка массива links по возрастанию цены (второй элемент в каждом подмассиве)
+# links.sort(key=lambda x: x[1])
 
-for i in range(len(links)):
-    print(links[i])
+# for i in range(len(links)):
+#     print(links[i])
 # reqq = requests.get("https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586361&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm=543722329&ignore_stocks=true", headers=HEADERS)
 
 # print(reqq.json())
@@ -819,3 +818,9 @@ for i in range(len(links)):
 #         with open(filename, "w", encoding="utf-8") as f:
 #             json.dump(results, f, ensure_ascii=False, indent=2)
 #         print(f"💾 Сохранено в файл: {filename}")
+
+url = "https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm=270777872&ignore_stocks=true"
+
+r = requests.get(url=url).json()
+
+print(r["products"][0].get('totalQuantity', '?'))

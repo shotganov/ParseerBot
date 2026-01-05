@@ -10,7 +10,7 @@ class Database:
         self.initialize_iphone_configs()
 
         if not self.get_system_config("wb_authorization"):
-            self.set_system_config("wb_authorization", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjY3NTU3ODEsInVzZXIiOiI1NzMxNjk0NCIsInNoYXJkX2tleSI6IjE2IiwiY2xpZW50X2lkIjoid2IiLCJzZXNzaW9uX2lkIjoiODUzZTEwYTE4NGRmNDc5NmEyNjYyNzRiY2ZjMzMzN2UiLCJ2YWxpZGF0aW9uX2tleSI6IjM5ODA3OGQ0N2VlZTk4NzgxNjQ4MTg3ZWE3ZDY3ZDE0ZmM3OGZlYWFjYjljNWI2Y2U4YjU4NTlmMGM0YTVhNDAiLCJwaG9uZSI6InhMK29IODloM2Q0OFlpTnVIUVpaK3c9PSIsInVzZXJfcmVnaXN0cmF0aW9uX2R0IjoxNjg1Mzg3MzI0LCJ2ZXJzaW9uIjoyfQ.KuMG_x7UreiXo-ERLoWOa9hkmYwdbqGwI2tzsMvXOXo7q2I5At3TDdwRyO0kVk2C1SmRpK_btz1cE7YYsivksSdslJOSpj7mxcn-IvRwE5aC5uKmxE1_56P2nt6rs9bxiNo_FRAlfuOgQ0eg_K-e4gazvD8LHujPwhFrk5KHQeL2SOk1KzpTP-vFrHKMAsJI_h8RVDgD9slFo8w6I4mHAJjSsjKBfaFlTgU2015lh_-dn04RgCyNUIGkjKd3eZa9LiC4yE4BGUZkTEWqqNzcBYqlbuAaEw62YAuqGWxbt0JAFsiwFFadStP3t33qbdJ1h5vzw3vQeRxjbaA9EQMCUw")
+            self.set_system_config("wb_authorization", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Njc2MzI5MjUsInVzZXIiOiI1NDU4NDA2MiIsInNoYXJkX2tleSI6IjYiLCJjbGllbnRfaWQiOiJ3YiIsInNlc3Npb25faWQiOiJmMmE3NWRjMThjODU0YTNkOGIxNDdlMTY4Mzc0NmJiZSIsInZhbGlkYXRpb25fa2V5IjoiMDJjYWY3OTU4Y2RiNTU5MjRiMTc3MzQ3MGZmOWIxNjliN2JjMzcxZmMxMmMzYTA5OTg4M2Y5OGU4NjMwZTVhNyIsInBob25lIjoiSmI5N1U0UTdYa1pBT1I4SWMrUFVkZz09IiwidXNlcl9yZWdpc3RyYXRpb25fZHQiOjE2OTUwNDgzMzksInZlcnNpb24iOjJ9.T6nkWSC7XyRuhvcMajMTxXk2SitYQg8OnO-4uepAWaTYEnw5U8KwQgQxP-yI9DrES7BI1Kt0T0pRmYNlH2Is5p2tNpUQ7de4QPRsUH9X674hbKXuofb2SZBYN5VaPy57gBvSUyyMJrNbbhGQejZg4-m9CI8Jn8PNcEUSNlMSymsTYrrVY1jRdymbTuMb5_qri7kWnhEmy02hDPrQN6XcBYKGwCuk5_bIwPWTC3Po1v3Cs0u65NMQzb1T6SO-Ji0TTzFs4x_nfr75q3lOZJEry-5iqMzlcB4NdA6wIBmyegfHFeeSJ4ZZikJkqqI93jJJ0jRooimk8-FMUnR5Pl0jcQ")
     
     def create_tables(self):
         cursor = self.conn.cursor()
@@ -260,7 +260,7 @@ class Database:
               'product_name': 'PlayStation 5 Slim',
               'product_type': 'ps5_slim_disk',
               'search_queries': json.dumps([
-                  "playstation 5 slim"
+                  "playstation 5 slim", "playstation 5 slim blue-ray"
               ], ensure_ascii=False),
               'include_keywords': json.dumps([  # ✅ Обязательные слова
                   "5", "slim"
@@ -739,23 +739,23 @@ if __name__ == "__main__":
     database = Database()
     
     # Тест новых методов
-    user_id = 12345
-    database.set_user_product_price(user_id, 'iphone_16_128', 80000) 
-    database.add_custom_link(user_id, 1, 50000)
-    database.add_custom_link(user_id, 2, 40000)
-    # price = database.get_user_product_price(user_id, 'iphone_16_128')
-    # print(f"Цена iPhone 16 128: {price}")
+    # user_id = 12345
+    # database.set_user_product_price(user_id, 'iphone_16_128', 80000) 
+    # database.add_custom_link(user_id, 1, 50000)
+    # database.add_custom_link(user_id, 2, 40000)
+    # # price = database.get_user_product_price(user_id, 'iphone_16_128')
+    # # print(f"Цена iPhone 16 128: {price}")
     
-    # all_prices = database.get_all_user_product_prices(user_id)
-    # print(f"Все цены пользователя: {all_prices}")
+    # # all_prices = database.get_all_user_product_prices(user_id)
+    # # print(f"Все цены пользователя: {all_prices}")
     
-    # users_tracking = database.get_users_tracking_product('iphone_16_128')
-    # print(f"Пользователи отслеживающие iPhone 16 128: {users_tracking}")
+    # # users_tracking = database.get_users_tracking_product('iphone_16_128')
+    # # print(f"Пользователи отслеживающие iPhone 16 128: {users_tracking}")
 
-    result = database.get_all_user_custom_links(user_id)
-    database.set_user_search_active(user_id, False)
+    # result = database.get_all_user_custom_links(user_id)
+    # database.set_user_search_active(user_id, False)
 
-    user_products = database.get_all_user_product_prices(user_id)
-    custom_links = database.get_all_user_custom_links(user_id)
-    print(user_products)
-    print(custom_links)
+    # user_products = database.get_all_user_product_prices(user_id)
+    # custom_links = database.get_all_user_custom_links(user_id)
+    # print(user_products)
+    # print(custom_links)
