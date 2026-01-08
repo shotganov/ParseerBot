@@ -16,8 +16,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
-BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
+BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+#BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 10
 COUNTER = 0
@@ -1687,7 +1687,7 @@ def main():
             while True:
                 await check_all_prices(application)
                 await asyncio.sleep(15)
-                
+
         asyncio.create_task(run_checks())
     
     print("🤖 Бот запущен!")
