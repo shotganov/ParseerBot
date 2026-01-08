@@ -41,8 +41,9 @@ class Database:
             CREATE TABLE IF NOT EXISTS product_notifications (
                 user_id INTEGER,
                 product_id INTEGER,
-                current_price INTEGER,  
+                current_price INTEGER,
                 discount_percent INTEGER DEFAULT 10,
+                in_stock INTEGER DEFAULT 1,            -- ✅ НОВОЕ (1 = в наличии, 0 = нет)
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, product_id),
                 FOREIGN KEY (user_id) REFERENCES user_settings (user_id)
@@ -640,9 +641,12 @@ class Database:
                     UPDATE product_notifications 
                     SET current_price = ?, 
                         discount_percent = ?,
+                        in_stock = 1,
                         last_updated = CURRENT_TIMESTAMP
                     WHERE user_id = ? AND product_id = ?
                 ''', (current_price_int, discount_percent, user_id, product_id))
+
+
                 
                 self.conn.commit()
                 print(f"📉 Цена обновлена для товара {product_id}: {existing_price} → {current_price_int}")
@@ -651,16 +655,54 @@ class Database:
                 return False, existing_price, False
                 
         else:
-            # Новая запись - товар увидели впервые
             cursor.execute('''
                 INSERT INTO product_notifications 
-                (user_id, product_id, current_price, discount_percent)
-                VALUES (?, ?, ?, ?)
+                (user_id, product_id, current_price, discount_percent, in_stock)
+                VALUES (?, ?, ?, ?, 1)
             ''', (user_id, product_id, current_price_int, discount_percent))
-            
+
             self.conn.commit()
             print(f"🆕 Новый товар {product_id} добавлен, цена: {current_price_int}")
             return True, None, False
+        
+    def get_user_notified_product_ids(self, user_id: int):
+        """Какие товары уже есть в product_notifications (то есть мы их уже слали пользователю)"""
+        cur = self.conn.cursor()
+        cur.execute('SELECT product_id FROM product_notifications WHERE user_id = ?', (user_id,))
+        return {row[0] for row in cur.fetchall()}
+    
+    def get_user_out_of_stock_product_ids(self, user_id: int):
+        cur = self.conn.cursor()
+        cur.execute('SELECT product_id FROM product_notifications WHERE user_id = ? AND in_stock = 0', (user_id,))
+        return {row[0] for row in cur.fetchall()}
+
+    def update_in_stock(self, user_id: int, product_id: int, in_stock: int):
+        """
+        Возвращает (changed, became_in_stock)
+        became_in_stock=True только при переходе 0 -> 1
+        """
+        cur = self.conn.cursor()
+        cur.execute(
+            'SELECT in_stock FROM product_notifications WHERE user_id = ? AND product_id = ?',
+            (user_id, product_id)
+        )
+        row = cur.fetchone()
+        if not row:
+            return False, False
+
+        old = int(row[0]) if row[0] is not None else 1
+        new = 1 if in_stock else 0
+        if old == new:
+            return False, False
+
+        cur.execute('''
+            UPDATE product_notifications
+            SET in_stock = ?, last_updated = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND product_id = ?
+        ''', (new, user_id, product_id))
+        self.conn.commit()
+        return True, (old == 0 and new == 1)
+
     
     def get_previous_price(self, user_id, product_id):
         """Получаем предыдущую цену товара (теперь это просто current_price из БД)"""

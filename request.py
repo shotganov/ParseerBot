@@ -822,5 +822,5 @@ import requests
 url = "https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm=270777872&ignore_stocks=true"
 
 r = requests.get(url=url).json()
-
+print(r)
 print(r["products"][0].get('totalQuantity', '?'))

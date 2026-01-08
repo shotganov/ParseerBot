@@ -16,8 +16,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
-#BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
+#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 10
 COUNTER = 0
@@ -54,310 +54,312 @@ def get_headers_without_auth():
 db = Database()
 
 async def get_products_by_config(session, config):
-    """Универсальная функция для получения товаров по конфигу из БД"""
-    products = []
-    product_ids = set()
-    
-    search_queries = config['search_queries']
-    include_keywords = config['include_keywords']  # ✅ Получаем обязательные слова
-    exclude_keywords = config['exclude_keywords']
-    
-    for search_query in search_queries:
-        empty_page_count = 0
-        max_empty_pages = 2
-        count_not_find_products = 0
-        max_count_not_find_products = 2
-        
-        for page in range(1, 2):
-            try:
+    """
+    Забирает товары из WB search по конфигу и сразу фильтрует по include/exclude.
+    Возвращает список products (как в WB JSON).
+    """
+    products: list[dict] = []
+    seen_ids: set[int] = set()
 
-                url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page={page}&query={search_query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
-               
-                print(f"🔍 Запрос: {search_query}, страница {page}")
-                
-                async with session.get(url, headers=get_headers_from_db(), timeout=10) as response:
-                    response_text = await response.text()
-                    
-                    if not response_text.strip():
-                        print(f"⚠️ Получена пустая страница для {search_query}, страница {page}")
-                        empty_page_count += 1
-                        if empty_page_count >= max_empty_pages:
-                            print(f"🛑 Получено {empty_page_count} пустых страниц подряд, завершаем цикл для '{search_query}'")
-                            break
-                        continue
-                    
-                    try:
-                        data = json.loads(response_text)
-                    except json.JSONDecodeError as e:
-                        print(f"❌ Ошибка парсинга JSON для {search_query}: {e}")
-                        empty_page_count += 1
-                        if empty_page_count >= max_empty_pages:
-                            print(f"🛑 Получено {empty_page_count} ошибок JSON подряд, завершаем цикл для '{search_query}'")
-                            break
-                        continue
-                
-                empty_page_count = 0
-                
-                if max_count_not_find_products == count_not_find_products:
-                    print(f"🛑 В ответе нет ключа 'products' для запроса более {max_count_not_find_products} раз")
-                    break
-                
-                if "products" not in data:
-                    print(f"❌ В ответе нет ключа 'products' для запроса: {search_query}")
-                    count_not_find_products += 1
+    search_queries = config.get("search_queries", [])
+    include_keywords = [k.lower() for k in config.get("include_keywords", [])]
+    exclude_keywords = [k.lower() for k in config.get("exclude_keywords", [])]
+
+    for query in search_queries:
+        url = (
+            "https://search.wb.ru/exactmatch/ru/common/v18/search"
+            f"?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415"
+            f"&hide_dtype=11&inheritFilters=false&lang=ru&page=1&query={query}"
+            "&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
+        )
+
+        try:
+            async with session.get(url, headers=get_headers_from_db(), timeout=10) as resp:
+                text = await resp.text()
+                if not text.strip():
+                    print(f"⚠️ Пустой ответ WB search для '{query}'")
                     continue
-                
-                count_not_find_products = 0
-                if not data["products"]:
-                    print(f"ℹ️ Нет товаров на странице {page} для запроса: {search_query}")
-                    break
-                
-                products_before = len(products)
-                for product in data["products"]:
-                    if product["id"] not in product_ids:
-                        # ✅ Проверяем обязательные слова перед добавлением
-                        name_lower = str(product["name"]).lower()
-                        
-                        # Проверяем обязательные слова - ВСЕ должны присутствовать
-                        should_include = True
-                        for keyword in include_keywords:
-                            if keyword.lower() not in name_lower:
-                                should_include = False
-                                break
-                        
-                        # Проверяем исключения - НИ ОДНО не должно присутствовать
-                        should_exclude = False
-                        for keyword in exclude_keywords:
-                            if keyword.lower() in name_lower:
-                                should_exclude = True
-                                break
-                        
-                        # Добавляем товар только если проходит обе проверки
-                        if should_include and not should_exclude:
-                            product_ids.add(product["id"])
-                            products.append(product)
+                try:
+                    data = json.loads(text)
+                except json.JSONDecodeError:
+                    print(f"❌ JSON decode error WB search для '{query}'")
+                    continue
+        except asyncio.TimeoutError:
+            print(f"⏰ Timeout WB search для '{query}'")
+            continue
+        except Exception as e:
+            print(f"❌ Ошибка WB search для '{query}': {e}")
+            continue
 
-                
-                products_added = len(products) - products_before
-                print(f"✅ Найдено {len(data['products'])} товаров, добавлено {products_added} новых для '{search_query}'")
-                
-                if products_added == 0:
-                    print(f"🛑 Не добавлено новых товаров на странице {page}, завершаем пагинацию для '{search_query}'")
-                    break
-                
-                if len(data["products"]) < 100:
-                    print(f"ℹ️ Меньше 100 товаров на странице {page}, завершаем пагинацию для '{search_query}'")
-                    break
-                    
-            except asyncio.TimeoutError:
-                print(f"⏰ Таймаут при запросе: {search_query}, страница {page}")
-                empty_page_count += 1
-                if empty_page_count >= max_empty_pages:
-                    print(f"🛑 Получено {empty_page_count} таймаутов подряд, завершаем цикл для '{search_query}'")
-                    break
-            except Exception as e:
-                print(f"❌ Ошибка при парсинге {search_query}: {e}")
-                empty_page_count += 1
-                if empty_page_count >= max_empty_pages:
-                    print(f"🛑 Получено {empty_page_count} ошибок подряд, завершаем цикл для '{search_query}'")
-                    break
-    
-    print(f"📦 Всего найдено {len(products)} товаров для конфига")
+        items = data.get("products") or []
+        if not items:
+            print(f"ℹ️ WB search: нет товаров для '{query}'")
+            continue
+
+        added = 0
+        for p in items:
+            pid = p.get("id")
+            if not pid or pid in seen_ids:
+                continue
+
+            name_lower = str(p.get("name", "")).lower()
+
+            # include: ВСЕ слова должны быть в названии
+            if any(k not in name_lower for k in include_keywords):
+                continue
+            # exclude: НИ ОДНО слово не должно быть в названии
+            if any(k in name_lower for k in exclude_keywords):
+                continue
+
+            seen_ids.add(pid)
+            products.append(p)
+            added += 1
+
+        print(f"✅ WB search '{query}': получили {len(items)}, добавили {added}")
+
+    print(f"📦 Итого по конфигу: {len(products)} товаров")
     return products
 
-def should_include_product(name_lower, config):
+
+
+def should_include_product(name_lower: str, config: dict) -> bool:
     """
-    ✅ Универсальная проверка товара по конфигу
-    Возвращает True если товар подходит
+    Универсальная проверка товара по конфигу.
+    include — все слова должны присутствовать
+    exclude — ни одно слово не должно присутствовать
     """
-    include_keywords = config.get('include_keywords', [])
-    exclude_keywords = config.get('exclude_keywords', [])
-    
-    # Проверяем обязательные слова - ВСЕ должны присутствовать
-    for keyword in include_keywords:
-        if keyword.lower() not in name_lower:
-            return False
-    
-    # Проверяем исключения - НИ ОДНО не должно присутствовать
-    for keyword in exclude_keywords:
-        if keyword.lower() in name_lower:
-            return False
-    
+    include_keywords = [k.lower() for k in config.get("include_keywords", [])]
+    exclude_keywords = [k.lower() for k in config.get("exclude_keywords", [])]
+
+    if any(k not in name_lower for k in include_keywords):
+        return False
+    if any(k in name_lower for k in exclude_keywords):
+        return False
     return True
 
 async def get_detailed_product_price(session, product_id, discount_percent=10):
-    """Универсальная функция получения детальной цены товара"""
+    """
+    Детальная карточка WB.
+
+    Возвращает dict:
+    {
+        product_id: int,
+        price: int | None,            # цена с учётом скидки
+        in_stock: bool | None,        # True / False / None
+        total_qty: int | None,
+        name: str | None,
+        supplierRating: float | None
+    }
+
+    Правила:
+      - если products пустой -> in_stock=False
+      - totalQuantity > 0 -> in_stock=True
+      - totalQuantity == 0 -> in_stock=False
+      - totalQuantity нет -> in_stock=None
+    """
+    result = {
+        "product_id": product_id,
+        "price": None,
+        "in_stock": None,
+        "total_qty": None,
+        "name": None,
+        "supplierRating": None,
+    }
+
+    url = (
+        "https://u-card.wb.ru/cards/v4/list"
+        f"?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11"
+        f"&ab_testing=false&lang=ru&nm={product_id}&ignore_stocks=true"
+    )
+
     try:
-        discount_multiplier = (100 - discount_percent) / 100
-        
-        # Используем один URL для всех товаров
-        url = f"https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm={product_id}&ignore_stocks=true"
-        
-        async with session.get(url, headers=get_headers_without_auth(), timeout=5) as response:
-            response_text = await response.text()
+        async with session.get(url, headers=get_headers_without_auth(), timeout=7) as resp:
+            text = await resp.text()
             try:
-                req_data = json.loads(response_text)
+                r = json.loads(text)
             except json.JSONDecodeError:
-                return None
-        
-        # Универсальная обработка ответа
-        if 'products' in req_data and len(req_data['products']) > 0:
-            base_price = math.floor(req_data['products'][0]['sizes'][0]['price']['product'])/100
-            discounted_price = base_price * discount_multiplier
-            return math.floor(discounted_price)
-        
-        return None
-        
+                return result
+
+        products = r.get("products") or []
+        if not products:
+            # карточка недоступна
+            result["in_stock"] = False
+            result["total_qty"] = 0
+            return result
+
+        p = products[0]
+
+        # ===== Название и рейтинг продавца =====
+        result["name"] = p.get("name")
+        result["supplierRating"] = p.get("supplierRating")
+
+        # ===== Количество =====
+        qty_raw = p.get("totalQuantity")
+        if qty_raw is not None:
+            try:
+                qty = int(qty_raw)
+                result["total_qty"] = qty
+                result["in_stock"] = qty > 0
+            except Exception:
+                result["total_qty"] = None
+                result["in_stock"] = None
+
+        # ===== Цена =====
+        try:
+            base_price = math.floor(p["sizes"][0]["price"]["product"]) / 100
+            discount_multiplier = (100 - int(discount_percent)) / 100
+            result["price"] = math.floor(base_price * discount_multiplier)
+        except Exception:
+            # цена может отсутствовать, но наличие мы уже знаем
+            pass
+
+        return result
+
+    except asyncio.TimeoutError:
+        print(f"⏰ Timeout детальной карточки {product_id}")
+        return result
     except Exception as e:
-        print(f"❌ Ошибка при получении детальной цены для {product_id}: {e}")
-        return None
+        print(f"❌ Ошибка детальной карточки {product_id}: {e}")
+        return result
+
 
 async def send_product_messages(application, user_id, products, title, max_products_per_message=15):
     """Отправляет сообщения с товарами, разбивая на части по max_products_per_message"""
     if not products:
         return
-    
-    # Сортируем товары по цене
-    products.sort(key=lambda x: x['price'])
-    
-    # Разбиваем товары на группы по max_products_per_message
-    product_chunks = [products[i:i + max_products_per_message] for i in range(0, len(products), max_products_per_message)]
-    
-    for chunk_index, product_chunk in enumerate(product_chunks):
-        message = f"{title}\n\n"
-        
-        # Добавляем информацию о номере части
-        if len(product_chunks) > 1:
-            message += f"*Часть {chunk_index + 1} из {len(product_chunks)}*\n\n"
-        
-        for product in product_chunk:
-            # Получаем количество товара, если доступно
-            quantity = product.get('totalQuantity', '?')
-            
-            # Ссылка в названии с количеством товара
-            product_link = f"[{product['name']}]({product['link']})"
-            
-            if product['price_dropped'] and product['previous_price']:
-                price_drop = product['previous_price'] - product['price']
-                price_drop_percent = (price_drop / product['previous_price']) * 100
-                message += f"🔵 {product_link}\n"
 
-                # Добавляем рейтинг продавца, если есть
-                if product.get('supplier_rating') is not None:
-                    rating = product['supplier_rating']
-                    message += f"⭐ Рейтинг продавца: {rating}\n"
-                elif product.get('supplier'):
-                    message += f"🏪 Продавец: {product['supplier']}\n"
+    products.sort(key=lambda x: x.get("price", 10**18))
+    chunks = [products[i:i + max_products_per_message] for i in range(0, len(products), max_products_per_message)]
 
-                message += f"💰 Цена: {product['price']:,} руб. (была {product['previous_price']:,} руб.)\n".replace(',', ' ')
-                message += f"📉 Снижение: {price_drop:,} руб. ({price_drop_percent:.1f}%)\n".replace(',', ' ')
+    for idx, chunk in enumerate(chunks):
+        msg = f"{title}\n\n"
+        if len(chunks) > 1:
+            msg += f"*Часть {idx + 1} из {len(chunks)}*\n\n"
+
+        for product in chunk:
+            qty = product.get("totalQuantity", "?")
+            link = f"[{product['name']}]({product['link']})"
+
+            if product.get("price_dropped") and product.get("previous_price"):
+                prev = product["previous_price"]
+                cur = product["price"]
+                drop = prev - cur
+                drop_pct = (drop / prev) * 100 if prev else 0
+
+                msg += f"🔵 {link}\n"
+                if product.get("supplier_rating") is not None:
+                    msg += f"⭐ Рейтинг продавца: {product['supplier_rating']}\n"
+                elif product.get("supplier"):
+                    msg += f"🏪 Продавец: {product['supplier']}\n"
+
+                msg += f"💰 Цена: {cur:,} руб. (была {prev:,} руб.)\n".replace(",", " ")
+                msg += f"📉 Снижение: {drop:,} руб. ({drop_pct:.1f}%)\n".replace(",", " ")
             else:
-                message += f"🔵 {product_link} ({quantity} шт)\n"
-                # Добавляем рейтинг продавца, если есть
-                if product.get('supplier_rating') is not None:
-                    rating = product['supplier_rating']
-                    message += f"⭐ Рейтинг продавца: {rating}\n"
-                elif product.get('supplier'):
-                    message += f"🏪 Продавец: {product['supplier']}\n"
+                msg += f"🔵 {link} ({qty} шт)\n"
+                if product.get("supplier_rating") is not None:
+                    msg += f"⭐ Рейтинг продавца: {product['supplier_rating']}\n"
+                elif product.get("supplier"):
+                    msg += f"🏪 Продавец: {product['supplier']}\n"
+                msg += f"💰 Цена: {product['price']:,} руб.\n".replace(",", " ")
 
-                message += f"💰 Цена: {product['price']:,} руб.\n".replace(',', ' ')
-              
-            message += "\n"
-        
-        # Добавляем информацию об общем количестве товаров в последнем сообщении
-        if chunk_index == len(product_chunks) - 1 and len(products) > len(product_chunk):
-            message += f"*Всего найдено товаров: {len(products)}*"
-        
+            msg += "\n"
+
         try:
-            # Для первого сообщения добавляем клавиатуру, для остальных - без
-            reply_markup = get_main_reply_keyboard() if chunk_index == 0 else None
-            
             await application.bot.send_message(
                 chat_id=user_id,
-                text=message,
-                reply_markup=reply_markup,
+                text=msg,
+                reply_markup=get_main_reply_keyboard() if idx == 0 else None,
                 disable_web_page_preview=True,
-                parse_mode='Markdown'
+                parse_mode="Markdown",
             )
-            
         except Exception as e:
-            print(f"❌ Ошибка отправки сообщения пользователю {user_id}: {e}")
-    
-    print(f"✅ Отправлено {len(product_chunks)} сообщений пользователю {user_id} о {len(products)} товарах")
+            print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
 
-async def filter_products_for_user(application, user_id, product_type, max_price, 
-                                 discount_percent, price_threshold, products, session):
-    """Универсальная фильтрация товаров для пользователя по конкретному типу продукта"""
-    
+    print(f"✅ Отправлено {len(chunks)} сообщений пользователю {user_id}")
+
+async def filter_products_for_user(application, user_id, product_type, max_price,
+                                   discount_percent, price_threshold, products, session):
+    """
+    Фильтрует товары по цене и отправляет уведомления о:
+      - новом товаре
+      - падении цены
+
+    НЕ отправляет уведомления "снова в наличии".
+    """
     if db.is_user_waiting_for_input(user_id):
-        print(f"⏸️ Пользователь {user_id} ожидает ввода, пропускаем проверку цен")
         return
-    
-    found_products = []
-    
-    min_price = math.floor(max_price * (price_threshold / 100))
-    print(f"🔍 Фильтрация {product_type} для пользователя {user_id}, цена: {max_price}, порог: {price_threshold}% (мин. {min_price} руб.)")
-    
-    # Получаем конфиг для этого типа продукта
+
     config = db.get_search_config(product_type)
     if not config:
-        print(f"❌ Конфиг для {product_type} не найден")
         return
-    
-    for product in products:
-        name = str(product["name"])
+
+    min_price = math.floor(max_price * (price_threshold / 100)) if price_threshold > 0 else 0
+    found = []
+
+    for p in products:
+        pid = p.get("id")
+        if not pid:
+            continue
+
+        name = str(p.get("name", ""))
         name_lower = name.lower()
-        base_price = math.floor(product['sizes'][0]['price']['product'])/100
-        initial_discounted_price = base_price * ((100 - discount_percent) / 100)
-        
-        # ✅ Проверяем товар по конфигу (обязательные слова + исключения)
         if not should_include_product(name_lower, config):
             continue
-        
-        if initial_discounted_price < max_price and initial_discounted_price > min_price:
-            # Определяем категорию для запроса детальной цены
-            detailed_price = await get_detailed_product_price(session, product['id'], discount_percent)
-            
-            if detailed_price and detailed_price < max_price and detailed_price > max_price/2:
-                
-                should_send, previous_price, price_dropped = db.save_notification(
-                    user_id, product['id'], detailed_price, discount_percent
-                )
-                
-                if should_send:
-                    print(f"✅ Найден подходящий {product_type}: {name} за {detailed_price} руб. "
-                          f"({'цена упала' if price_dropped else 'новый товар'})")
-                    
-                    found_products.append({
-                        'id': product['id'],
-                        'name': name,
-                        'price': detailed_price,
-                        'previous_price': previous_price,
-                        'price_dropped': price_dropped,
-                        'link': f"https://www.wildberries.ru/catalog/{product['id']}/detail.aspx",
-                        'supplier': product.get('supplier', '—'),
-                        'supplier_rating': product.get('supplierRating', None),
-                        'totalQuantity': product.get('totalQuantity', '?')
-                    })
-    
-    # Отправка сообщений
-    if found_products:
-        product_name = config['product_name']
-        # Определяем иконку по типу продукта
-        if 'iphone' in product_type:
+
+        # грубая цена из выдачи — чтобы не дергать u-card слишком часто
+        try:
+            base_price = math.floor(p["sizes"][0]["price"]["product"]) / 100
+        except Exception:
+            continue
+
+        approx_discounted = base_price * ((100 - discount_percent) / 100)
+        if not (min_price < approx_discounted < max_price):
+            continue
+
+        detailed_product_info = await get_detailed_product_price(session, pid, discount_percent)
+
+        # если детально выяснили что товара НЕТ — ставим 0 и не шлём по цене
+        if detailed_product_info["in_stock"] is False:
+            db.update_in_stock(user_id, pid, 0)
+            continue
+
+        # если цена не получена — пропускаем
+        if detailed_product_info["price"] is None:
+            continue
+
+        if not (min_price < detailed_product_info["price"] < max_price):
+            continue
+
+        should_send, prev_price, price_dropped = db.save_notification(
+            user_id, pid, detailed_product_info["price"], discount_percent
+        )
+        if not should_send:
+            continue
+
+        found.append({
+            "id": pid,
+            "name": name,
+            "price": detailed_product_info["price"],
+            "previous_price": prev_price,
+            "price_dropped": price_dropped,
+            "link": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
+            "supplier": p.get("supplier", "—"),
+            "supplier_rating": p.get("supplierRating", None),
+            "totalQuantity": detailed_product_info["total_qty"] if detailed_product_info["total_qty"] else p.get("totalQuantity", "?"),
+        })
+
+    if found:
+        product_name = config["product_name"]
+        if "iphone" in product_type:
             title = f"📱 Найдены {product_name} по выгодным ценам:"
-        elif 'ps5' in product_type:
+        elif "ps5" in product_type:
             title = f"🎮 Найдены {product_name} по выгодным ценам:"
         else:
             title = f"🛍️ Найдены {product_name} по выгодным ценам:"
-        
-        await send_product_messages(
-            application, 
-            user_id, 
-            found_products, 
-            title,
-            max_products_per_message=15
-        )
+
+        await send_product_messages(application, user_id, found, title, max_products_per_message=15)
+
+
 
 async def check_wb_token_health(application, all_products):
     global IPHONE_16_MIN_THRESHOLD, COUNTER, MAX_COUNTER
@@ -408,15 +410,39 @@ async def check_wb_token_health(application, all_products):
       except Exception as e:
           print(f"❌ Не удалось отправить уведомление: {e}")
 
+async def notify_back_in_stock(application, user_id, product_id, detailed_product_info):
+   
+    products = [{
+        "id": product_id,
+        "name": detailed_product_info["name"],
+        "price": detailed_product_info["price"] if detailed_product_info["price"] is not None else 0,
+        "previous_price": None,
+        "price_dropped": False,
+        "link": f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx",
+        "supplier": "—",
+        "supplier_rating": detailed_product_info["supplierRating"],
+        "totalQuantity": detailed_product_info["total_qty"] if detailed_product_info["total_qty"] is not None else "?",
+    }]
+    await send_product_messages(
+        application,
+        user_id,
+        products,
+        "✅ Товар снова появился в наличии:",
+        max_products_per_message=15
+    )
+
+
 async def check_all_prices(application):
-    """Проверка цен для всех пользователей + проверка токена WB + отслеживание кастомных ссылок без ввода цены"""
+    """
+    Логика наличия (единственная точка):
+      - missing = notified - seen  -> проверяем детально -> если qty==0 => in_stock=0
+      - back_candidates = seen ∩ out_of_stock -> проверяем детально -> если qty>0 => 0->1 => уведомляем
+    """
     try:
-        # Очистка старых уведомлений
         deleted = db.cleanup_old_records(hours=24)
         if deleted > 0:
             print(f"🗑️ Очищено {deleted} старых записей")
 
-        # Раз в 30 дней — очистка старых кастомных ссылок
         last_cleanup = db.get_system_config("last_custom_cleanup")
         now = datetime.now()
         if not last_cleanup or (now - datetime.fromisoformat(last_cleanup)).days >= 30:
@@ -424,109 +450,145 @@ async def check_all_prices(application):
             print(f"🧹 Очищено {deleted_custom} старых кастомных ссылок")
             db.set_system_config("last_custom_cleanup", now.isoformat())
 
+        all_configs = db.get_all_search_configs()
+        active_users = db.get_users_with_any_active_tracking()
+        if not active_users:
+            return
+
+        # user -> {prices, discount, threshold}
+        users_with_prices = {}
+        all_tracked_types = set()
+
+        for uid in active_users:
+            up = db.get_all_user_product_prices(uid)
+            user_prices = {pt: data["price"] for pt, data in up.items()}
+            if user_prices:
+                disc, thr = db.get_user_settings(uid)
+                users_with_prices[uid] = {"prices": user_prices, "discount": disc, "threshold": thr}
+                all_tracked_types.update(user_prices.keys())
+
         connector = aiohttp.TCPConnector(limit=20)
         async with aiohttp.ClientSession(connector=connector) as session:
-            print("🔄 Начинаем сбор товаров...")
-
-            # 1. Стандартные категории (iPhone, PS5)
-            all_configs = db.get_all_search_configs()
-            active_users = db.get_users_with_any_active_tracking()
-            if not active_users:
-                print("ℹ️ Нет активных пользователей")
-                return
-
-            # Собираем отслеживаемые типы
-            all_tracked_product_types = set()
-            users_with_prices = {}
-            for user_id in active_users:
-                user_products = db.get_all_user_product_prices(user_id)
-                user_prices = {pt: data['price'] for pt, data in user_products.items()}
-                if user_prices:
-                    disc, thr = db.get_user_settings(user_id)
-                    users_with_prices[user_id] = {'prices': user_prices, 'discount': disc, 'threshold': thr}
-                    all_tracked_product_types.update(user_prices.keys())
-
-            # Сбор по категориям
+            # 1) сбор выдачи по всем tracked types
             all_products = {}
-            for product_type in all_tracked_product_types:
-                if product_type in all_configs:
-                    config = all_configs[product_type]
-                    products = await get_products_by_config(session, config)
-                    all_products[product_type] = products
-                    print(f"✅ Найдено {len(products)} товаров для {product_type}")
-                    
-            # Проверка токена через iPhone 16
+            for product_type in all_tracked_types:
+                cfg = all_configs.get(product_type)
+                if not cfg:
+                    continue
+                all_products[product_type] = await get_products_by_config(session, cfg)
+
             await check_wb_token_health(application, all_products)
 
-            # 2. Обработка КАСТОМНЫХ ссылок (без установки цены)
+            # 2) кастомные ссылки (без наличия — только цена)
             custom_links_by_user = {}
             custom_product_ids = set()
-            for user_id in active_users:
-                links = db.get_user_custom_links(user_id)
+            for uid in active_users:
+                links = db.get_user_custom_links(uid)
                 if links:
-                    custom_links_by_user[user_id] = links
+                    custom_links_by_user[uid] = links
                     custom_product_ids.update(links.keys())
 
-            # Получаем текущие цены по артикулам
-            custom_current_prices = {}
+            custom_current_base_prices = {}
             if custom_product_ids:
-                print(f"🔍 Получение текущих цен для {len(custom_product_ids)} кастомных артикулов...")
                 for pid in custom_product_ids:
-                    raw_price = await get_detailed_product_price(session, pid, discount_percent=0)
-                    if raw_price is not None:
-                        custom_current_prices[pid] = raw_price
+                    detailed_product_info = await get_detailed_product_price(session, pid, discount_percent=0)
+                    if detailed_product_info["price"] is not None:
+                        custom_current_base_prices[pid] = detailed_product_info["price"]
 
-            # 3. Фильтрация стандартных товаров
-            for user_id, user_data in users_with_prices.items():
-                if db.is_user_waiting_for_input(user_id):
+            # 3) seen_ids по пользователю + фильтрация по цене
+            user_seen_ids = {uid: set() for uid in users_with_prices.keys()}
+
+            for uid, udata in users_with_prices.items():
+                if db.is_user_waiting_for_input(uid):
                     continue
-                for product_type, max_price in user_data['prices'].items():
-                    if max_price > 0 and product_type in all_products:
-                        await filter_products_for_user(
-                            application, user_id, product_type, max_price,
-                            user_data['discount'], user_data['threshold'],
-                            all_products[product_type], session
-                        )
 
-            # 4. Проверка кастомных товаров: уведомление ТОЛЬКО при снижении цены
-            if custom_links_by_user and custom_current_prices:
-                print("🔍 Проверка кастомных товаров на снижение цены...")
-                for user_id, custom_links in custom_links_by_user.items():
-                    if db.is_user_waiting_for_input(user_id):
+                for product_type, max_price in udata["prices"].items():
+                    if max_price <= 0:
                         continue
-                    discount_percent, _ = db.get_user_settings(user_id)
+
+                    prods = all_products.get(product_type) or []
+                    if not prods:
+                        continue
+
+                    # собираем seen_ids (ПОСЛЕ include/exclude)
+                    cfg = db.get_search_config(product_type)
+                    if cfg:
+                        for p in prods:
+                            pid = p.get("id")
+                            if not pid:
+                                continue
+                            name_lower = str(p.get("name", "")).lower()
+                            if should_include_product(name_lower, cfg):
+                                user_seen_ids[uid].add(pid)
+
+                    # фильтрация по цене (без уведомлений по наличию)
+                    await filter_products_for_user(
+                        application, uid, product_type, max_price,
+                        udata["discount"], udata["threshold"],
+                        prods, session
+                    )
+
+            # 4) кастом: уведомление только при снижении цены
+            if custom_links_by_user and custom_current_base_prices:
+                for uid, links in custom_links_by_user.items():
+                    if db.is_user_waiting_for_input(uid):
+                        continue
+                    disc, _ = db.get_user_settings(uid)
+
                     found = []
-                    for product_id, initial_price in custom_links.items():
-                        if product_id not in custom_current_prices:
+                    for pid, initial_price in links.items():
+                        base = custom_current_base_prices.get(pid)
+                        if base is None:
                             continue
-                        current_base = custom_current_prices[product_id]
-                        current_discounted = math.floor(current_base * (100 - discount_percent) / 100)
+                        current_discounted = math.floor(base * (100 - disc) / 100)
 
-                        # Уведомляем, если цена упала ниже initial_price
                         if current_discounted < initial_price:
-                            should_send, prev_price, price_dropped = db.save_notification(
-                                user_id, product_id, current_discounted, discount_percent
-                            )
+                            should_send, prev_price, _ = db.save_notification(uid, pid, current_discounted, disc)
                             if should_send:
-                              found.append({
-                                  'id': product_id,
-                                  'name': f"Товар WB (артикул {product_id})",
-                                  'price': current_discounted,
-                                  'previous_price': prev_price or initial_price,
-                                  'price_dropped': True,
-                                  'link': f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx",
-                                  'supplier': '—',  # для кастомных ссылок — неизвестен
-                                  'supplier_rating': None,
-                                  'totalQuantity': '?'
-                              })
+                                found.append({
+                                    "id": pid,
+                                    "name": f"Товар WB (артикул {pid})",
+                                    "price": current_discounted,
+                                    "previous_price": prev_price or initial_price,
+                                    "price_dropped": True,
+                                    "link": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
+                                    "supplier": "—",
+                                    "supplier_rating": None,
+                                    "totalQuantity": "?",
+                                })
                     if found:
-                        await send_product_messages(
-                            application, user_id, found,
-                            "📉 Цена на отслеживаемый товар снизилась:",
-                            max_products_per_message=15
-                        )
+                        await send_product_messages(application, uid, found,
+                                                   "📉 Цена на отслеживаемый товар снизилась:", 15)
 
-            print("✅ Проверка цен завершена")
+            # 5) ЕДИНСТВЕННОЕ место логики наличия и уведомлений "снова в наличии"
+            for uid in users_with_prices.keys():
+                if db.is_user_waiting_for_input(uid):
+                    continue
+
+                seen = user_seen_ids.get(uid, set())
+                notified = db.get_user_notified_product_ids(uid)
+                out_of_stock = db.get_user_out_of_stock_product_ids(uid)
+
+                disc, _ = db.get_user_settings(uid)
+
+                # A) исчез из выдачи -> проверка -> если qty==0 => in_stock=0
+                missing = notified - seen
+                for pid in missing:
+                    detailed_product_info = await get_detailed_product_price(session, pid, disc)
+                    if detailed_product_info["in_stock"] is False:
+                        db.update_in_stock(uid, pid, 0)
+
+                # B) вернулся в выдачу, а в БД был in_stock=0 -> проверка -> 0->1 -> уведомление
+                back_candidates = seen & out_of_stock
+                for pid in back_candidates:
+                    detailed_product_info = await get_detailed_product_price(session, pid, disc)
+                    if detailed_product_info["in_stock"] is True:
+                        _, became = db.update_in_stock(uid, pid, 1)
+                        if became:
+                            await notify_back_in_stock(application, uid, pid, detailed_product_info)
+
+            print("✅ Проверка завершена")
+
     except Exception as e:
         print(f"❌ Ошибка в check_all_prices: {e}")
         import traceback
@@ -1432,15 +1494,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 🔸 Получаем базовую цену без скидки
             connector = aiohttp.TCPConnector(limit=5)
             async with aiohttp.ClientSession(connector=connector) as session:
-                base_price = await get_detailed_product_price(session, product_id, discount_percent=0)
-                if base_price is None:
+                detailed_product_info = await get_detailed_product_price(session, product_id, discount_percent=0)
+                if detailed_product_info["price"] is None:
                     await update.message.reply_text(
                         "❌ Не удалось получить цену. Попробуйте позже.",
                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data="products_links")]])
                     )
                     return
                 # Применяем скидку пользователя
-                current_price = math.floor(base_price * (100 - discount_percent) / 100)
+                current_price = math.floor(detailed_product_info["price"] * (100 - discount_percent) / 100)
 
             # Сохраняем как initial_price (уже со скидкой!)
             db.add_custom_link(user_id, product_id, current_price)
@@ -1456,7 +1518,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-       
         # === 3. Обработка ввода токена WB ===
         if product_type == 'wb_token':
             token = text.replace("Bearer", "").strip()
@@ -1618,14 +1679,15 @@ def main():
     
     job_queue = application.job_queue
     if job_queue:
-        job_queue.run_repeating(price_checker_job, interval=10, first=10)
+        job_queue.run_repeating(price_checker_job, interval=15, first=10)
         print("✅ JobQueue запущен")
     else:
         print("❌ JobQueue не доступен, используем альтернативный метод")
         async def run_checks():
             while True:
                 await check_all_prices(application)
-                await asyncio.sleep(10)
+                await asyncio.sleep(15)
+                
         asyncio.create_task(run_checks())
     
     print("🤖 Бот запущен!")
