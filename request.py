@@ -819,8 +819,7 @@ import requests
 #             json.dump(results, f, ensure_ascii=False, indent=2)
 #         print(f"💾 Сохранено в файл: {filename}")
 
-url = "https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm=270777872&ignore_stocks=true"
-
+url = "https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&ab_testing=false&lang=ru&nm=270777872;588891171;528856840;378838465;606556591;304867202;462113648;521624897;462038268&ignore_stocks=true"
 r = requests.get(url=url).json()
 print(r)
 print(r["products"][0].get('totalQuantity', '?'))

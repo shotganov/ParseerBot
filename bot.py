@@ -16,8 +16,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
-#BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
+#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 10
 COUNTER = 0
@@ -137,29 +137,28 @@ def should_include_product(name_lower: str, config: dict) -> bool:
         return False
     return True
 
-async def get_detailed_product_price(session, product_id, discount_percent=10):
+
+# =========================
+# 1) DETALKA + CACHE (base_price only)
+# =========================
+
+async def get_detailed_product_base(session, product_id: int) -> dict:
     """
-    Детальная карточка WB.
+    Детальная карточка WB. Всегда возвращает base_price (без скидки).
 
-    Возвращает dict:
+    dict:
     {
-        product_id: int,
-        price: int | None,            # цена с учётом скидки
-        in_stock: bool | None,        # True / False / None
-        total_qty: int | None,
-        name: str | None,
-        supplierRating: float | None
+        "product_id": int,
+        "base_price": int|None,         # цена без скидки
+        "in_stock": bool|None,
+        "total_qty": int|None,
+        "name": str|None,
+        "supplierRating": float|None
     }
-
-    Правила:
-      - если products пустой -> in_stock=False
-      - totalQuantity > 0 -> in_stock=True
-      - totalQuantity == 0 -> in_stock=False
-      - totalQuantity нет -> in_stock=None
     """
     result = {
         "product_id": product_id,
-        "price": None,
+        "base_price": None,
         "in_stock": None,
         "total_qty": None,
         "name": None,
@@ -182,19 +181,19 @@ async def get_detailed_product_price(session, product_id, discount_percent=10):
 
         products = r.get("products") or []
         if not products:
-            # карточка недоступна
+            # карточка недоступна / товара нет
             result["in_stock"] = False
             result["total_qty"] = 0
             return result
 
         p = products[0]
 
-        # ===== Название и рейтинг продавца =====
+        # meta
         result["name"] = p.get("name")
         result["supplierRating"] = p.get("supplierRating")
 
-        # ===== Количество =====
-        qty_raw = p.get("totalQuantity")
+        # qty
+        qty_raw = p.get("totalQuantity", None)
         if qty_raw is not None:
             try:
                 qty = int(qty_raw)
@@ -204,11 +203,10 @@ async def get_detailed_product_price(session, product_id, discount_percent=10):
                 result["total_qty"] = None
                 result["in_stock"] = None
 
-        # ===== Цена =====
+        # base price (без скидки)
         try:
             base_price = math.floor(p["sizes"][0]["price"]["product"]) / 100
-            discount_multiplier = (100 - int(discount_percent)) / 100
-            result["price"] = math.floor(base_price * discount_multiplier)
+            result["base_price"] = int(base_price)
         except Exception:
             # цена может отсутствовать, но наличие мы уже знаем
             pass
@@ -223,8 +221,30 @@ async def get_detailed_product_price(session, product_id, discount_percent=10):
         return result
 
 
+async def get_product_details_cached(session, product_id: int, cache: dict) -> dict:
+    """
+    Возвращает деталку из кеша на прогон.
+    cache: dict[int, dict]
+    """
+    if product_id in cache:
+        return cache[product_id]
+
+    info = await get_detailed_product_base(session, product_id)
+    cache[product_id] = info
+    return info
+
+
+def calc_discounted_price(base_price: int | None, discount_percent: int) -> int | None:
+    if base_price is None:
+        return None
+    return math.floor(base_price * (100 - int(discount_percent)) / 100)
+
+
+# =========================
+# 2) MESSAGES (same, ok)
+# =========================
+
 async def send_product_messages(application, user_id, products, title, max_products_per_message=15):
-    """Отправляет сообщения с товарами, разбивая на части по max_products_per_message"""
     if not products:
         return
 
@@ -277,14 +297,56 @@ async def send_product_messages(application, user_id, products, title, max_produ
 
     print(f"✅ Отправлено {len(chunks)} сообщений пользователю {user_id}")
 
-async def filter_products_for_user(application, user_id, product_type, max_price,
-                                   discount_percent, price_threshold, products, session):
+
+# =========================
+# 3) BACK-IN-STOCK NOTIFY (needs base->discounted calc)
+# =========================
+
+async def notify_back_in_stock(application, user_id, product_id, info: dict, discount_percent: int):
+    """
+    info — результат деталки (base), price считаем тут.
+    """
+    price = calc_discounted_price(info.get("base_price"), discount_percent)
+    products = [{
+        "id": product_id,
+        "name": info.get("name") or f"Товар WB (артикул {product_id})",
+        "price": price if price is not None else 0,
+        "previous_price": None,
+        "price_dropped": False,
+        "link": f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx",
+        "supplier": "—",
+        "supplier_rating": info.get("supplierRating"),
+        "totalQuantity": info.get("total_qty") if info.get("total_qty") is not None else "?",
+    }]
+    await send_product_messages(
+        application,
+        user_id,
+        products,
+        "✅ Товар снова появился в наличии:",
+        max_products_per_message=15
+    )
+
+
+# =========================
+# 4) FILTER FOR USER (uses cache+base_price; no get_detailed_product_price)
+# =========================
+
+async def filter_products_for_user(
+    application,
+    user_id,
+    product_type,
+    max_price,
+    discount_percent,
+    price_threshold,
+    products,
+    session,
+    details_cache: dict,
+):
     """
     Фильтрует товары по цене и отправляет уведомления о:
       - новом товаре
       - падении цены
-
-    НЕ отправляет уведомления "снова в наличии".
+    НЕ отправляет уведомления "снова в наличии" (это делает check_all_prices в 1 месте).
     """
     if db.is_user_waiting_for_input(user_id):
         return
@@ -306,32 +368,33 @@ async def filter_products_for_user(application, user_id, product_type, max_price
         if not should_include_product(name_lower, config):
             continue
 
-        # грубая цена из выдачи — чтобы не дергать u-card слишком часто
+        # грубая цена из выдачи — быстрый предварительный фильтр
         try:
-            base_price = math.floor(p["sizes"][0]["price"]["product"]) / 100
+            base_price_search = math.floor(p["sizes"][0]["price"]["product"]) / 100
         except Exception:
             continue
 
-        approx_discounted = base_price * ((100 - discount_percent) / 100)
+        approx_discounted = base_price_search * ((100 - discount_percent) / 100)
         if not (min_price < approx_discounted < max_price):
             continue
 
-        detailed_product_info = await get_detailed_product_price(session, pid, discount_percent)
+        # детальная карточка (через кеш)
+        info = await get_product_details_cached(session, pid, details_cache)
 
         # если детально выяснили что товара НЕТ — ставим 0 и не шлём по цене
-        if detailed_product_info["in_stock"] is False:
+        if info.get("in_stock") is False:
             db.update_in_stock(user_id, pid, 0)
             continue
 
-        # если цена не получена — пропускаем
-        if detailed_product_info["price"] is None:
+        detailed_discounted = calc_discounted_price(info.get("base_price"), discount_percent)
+        if detailed_discounted is None:
             continue
 
-        if not (min_price < detailed_product_info["price"] < max_price):
+        if not (min_price < detailed_discounted < max_price):
             continue
 
         should_send, prev_price, price_dropped = db.save_notification(
-            user_id, pid, detailed_product_info["price"], discount_percent
+            user_id, pid, detailed_discounted, discount_percent
         )
         if not should_send:
             continue
@@ -339,17 +402,17 @@ async def filter_products_for_user(application, user_id, product_type, max_price
         found.append({
             "id": pid,
             "name": name,
-            "price": detailed_product_info["price"],
+            "price": detailed_discounted,
             "previous_price": prev_price,
             "price_dropped": price_dropped,
             "link": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
             "supplier": p.get("supplier", "—"),
-            "supplier_rating": p.get("supplierRating", None),
-            "totalQuantity": detailed_product_info["total_qty"] if detailed_product_info["total_qty"] else p.get("totalQuantity", "?"),
+            "supplier_rating": info.get("supplierRating", None),
+            "totalQuantity": info.get("total_qty") if info.get("total_qty") is not None else p.get("totalQuantity", "?"),
         })
 
     if found:
-        product_name = config["product_name"]
+        product_name = config.get("product_name", product_type)
         if "iphone" in product_type:
             title = f"📱 Найдены {product_name} по выгодным ценам:"
         elif "ps5" in product_type:
@@ -360,83 +423,19 @@ async def filter_products_for_user(application, user_id, product_type, max_price
         await send_product_messages(application, user_id, found, title, max_products_per_message=15)
 
 
-
-async def check_wb_token_health(application, all_products):
-    global IPHONE_16_MIN_THRESHOLD, COUNTER, MAX_COUNTER
-    product_type = 'iphone_16_128'
-    if product_type not in all_products:
-        print("ℹ️ iPhone 16 128Gb не отслеживается — проверка токена пропущена")
-        return
-
-    product_count = len(all_products[product_type])
-    if product_count >= IPHONE_16_MIN_THRESHOLD:
-        COUNTER = 0
-        print(f"✅ Токен WB в порядке: найдено {product_count} iPhone 16 (128Gb)")
-        return
-
-    # === ПРОВЕРКА: прошло ли 30 минут с последнего уведомления? ===
-    last_alert_str = db.get_system_config("last_token_alert_time")
-    now = datetime.now()
-    COUNTER += 1
-
-    if last_alert_str:
-        try:
-            last_alert = datetime.fromisoformat(last_alert_str)
-            if now - last_alert < timedelta(minutes=30):
-                print("⏳ Уведомление уже отправлялось менее 30 минут назад — пропускаем")
-                return
-        except Exception as e:
-            print(f"⚠️ Ошибка при разборе last_token_alert_time: {e}")
-
-    
-
-    if COUNTER == MAX_COUNTER:
-      COUNTER = 0
-      try:
-          await application.bot.send_message(
-              chat_id=ADMIN_USER_ID,
-            text=(
-                  "⚠️ Внимание, администратор!\n"
-                  f"При поиске «iPhone 16 128Gb» найдено {product_count} товаров.\n"
-                  f"Порог: {IPHONE_16_MIN_THRESHOLD}.\n\n"
-                  "🔹 Вероятно, токен Wildberries устарел.\n"
-                  "🔹 Обновите его в Настройках → «🔑 Изменить токен WB».\n\n"
-                  "ℹ️ Уведомления приходят не чаще раза в 30 минут."
-              )
-          )
-          print("✅ Уведомление админу отправлено")
-          # === Сохраняем время отправки ===
-          db.set_system_config("last_token_alert_time", now.isoformat())
-      except Exception as e:
-          print(f"❌ Не удалось отправить уведомление: {e}")
-
-async def notify_back_in_stock(application, user_id, product_id, detailed_product_info):
-   
-    products = [{
-        "id": product_id,
-        "name": detailed_product_info["name"],
-        "price": detailed_product_info["price"] if detailed_product_info["price"] is not None else 0,
-        "previous_price": None,
-        "price_dropped": False,
-        "link": f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx",
-        "supplier": "—",
-        "supplier_rating": detailed_product_info["supplierRating"],
-        "totalQuantity": detailed_product_info["total_qty"] if detailed_product_info["total_qty"] is not None else "?",
-    }]
-    await send_product_messages(
-        application,
-        user_id,
-        products,
-        "✅ Товар снова появился в наличии:",
-        max_products_per_message=15
-    )
-
+# =========================
+# 5) CHECK ALL PRICES (single stock logic point + cache + base_price for customs)
+# =========================
 
 async def check_all_prices(application):
     """
     Логика наличия (единственная точка):
       - missing = notified - seen  -> проверяем детально -> если qty==0 => in_stock=0
       - back_candidates = seen ∩ out_of_stock -> проверяем детально -> если qty>0 => 0->1 => уведомляем
+
+    Оптимизация:
+      - деталка кешируется на один прогон (details_cache)
+      - кастомные товары тоже берут base_price из деталки, скидка считается локально
     """
     try:
         deleted = db.cleanup_old_records(hours=24)
@@ -469,6 +468,9 @@ async def check_all_prices(application):
 
         connector = aiohttp.TCPConnector(limit=20)
         async with aiohttp.ClientSession(connector=connector) as session:
+            # кеш деталки на прогон
+            details_cache: dict[int, dict] = {}
+
             # 1) сбор выдачи по всем tracked types
             all_products = {}
             for product_type in all_tracked_types:
@@ -479,7 +481,7 @@ async def check_all_prices(application):
 
             await check_wb_token_health(application, all_products)
 
-            # 2) кастомные ссылки (без наличия — только цена)
+            # 2) кастомные ссылки
             custom_links_by_user = {}
             custom_product_ids = set()
             for uid in active_users:
@@ -488,12 +490,13 @@ async def check_all_prices(application):
                     custom_links_by_user[uid] = links
                     custom_product_ids.update(links.keys())
 
-            custom_current_base_prices = {}
+            # base_price по кастомным артикулам (через кеш)
+            custom_base_prices = {}
             if custom_product_ids:
                 for pid in custom_product_ids:
-                    detailed_product_info = await get_detailed_product_price(session, pid, discount_percent=0)
-                    if detailed_product_info["price"] is not None:
-                        custom_current_base_prices[pid] = detailed_product_info["price"]
+                    info = await get_product_details_cached(session, pid, details_cache)
+                    if info.get("base_price") is not None:
+                        custom_base_prices[pid] = info["base_price"]
 
             # 3) seen_ids по пользователю + фильтрация по цене
             user_seen_ids = {uid: set() for uid in users_with_prices.keys()}
@@ -521,15 +524,21 @@ async def check_all_prices(application):
                             if should_include_product(name_lower, cfg):
                                 user_seen_ids[uid].add(pid)
 
-                    # фильтрация по цене (без уведомлений по наличию)
+                    # фильтрация по цене (использует кеш деталки)
                     await filter_products_for_user(
-                        application, uid, product_type, max_price,
-                        udata["discount"], udata["threshold"],
-                        prods, session
+                        application,
+                        uid,
+                        product_type,
+                        max_price,
+                        udata["discount"],
+                        udata["threshold"],
+                        prods,
+                        session,
+                        details_cache,
                     )
 
             # 4) кастом: уведомление только при снижении цены
-            if custom_links_by_user and custom_current_base_prices:
+            if custom_links_by_user and custom_base_prices:
                 for uid, links in custom_links_by_user.items():
                     if db.is_user_waiting_for_input(uid):
                         continue
@@ -537,10 +546,13 @@ async def check_all_prices(application):
 
                     found = []
                     for pid, initial_price in links.items():
-                        base = custom_current_base_prices.get(pid)
+                        base = custom_base_prices.get(pid)
                         if base is None:
                             continue
-                        current_discounted = math.floor(base * (100 - disc) / 100)
+
+                        current_discounted = calc_discounted_price(base, disc)
+                        if current_discounted is None:
+                            continue
 
                         if current_discounted < initial_price:
                             should_send, prev_price, _ = db.save_notification(uid, pid, current_discounted, disc)
@@ -560,7 +572,7 @@ async def check_all_prices(application):
                         await send_product_messages(application, uid, found,
                                                    "📉 Цена на отслеживаемый товар снизилась:", 15)
 
-            # 5) ЕДИНСТВЕННОЕ место логики наличия и уведомлений "снова в наличии"
+            # 5) ЕДИНСТВЕННОЕ место логики наличия + уведомлений "снова в наличии"
             for uid in users_with_prices.keys():
                 if db.is_user_waiting_for_input(uid):
                     continue
@@ -574,18 +586,18 @@ async def check_all_prices(application):
                 # A) исчез из выдачи -> проверка -> если qty==0 => in_stock=0
                 missing = notified - seen
                 for pid in missing:
-                    detailed_product_info = await get_detailed_product_price(session, pid, disc)
-                    if detailed_product_info["in_stock"] is False:
+                    info = await get_product_details_cached(session, pid, details_cache)
+                    if info.get("in_stock") is False:
                         db.update_in_stock(uid, pid, 0)
 
                 # B) вернулся в выдачу, а в БД был in_stock=0 -> проверка -> 0->1 -> уведомление
                 back_candidates = seen & out_of_stock
                 for pid in back_candidates:
-                    detailed_product_info = await get_detailed_product_price(session, pid, disc)
-                    if detailed_product_info["in_stock"] is True:
+                    info = await get_product_details_cached(session, pid, details_cache)
+                    if info.get("in_stock") is True:
                         _, became = db.update_in_stock(uid, pid, 1)
                         if became:
-                            await notify_back_in_stock(application, uid, pid, detailed_product_info)
+                            await notify_back_in_stock(application, uid, pid, info, disc)
 
             print("✅ Проверка завершена")
 
@@ -594,8 +606,57 @@ async def check_all_prices(application):
         import traceback
         traceback.print_exc()
 
+
 is_price_check_running = False
 
+
+async def check_wb_token_health(application, all_products):
+    global IPHONE_16_MIN_THRESHOLD, COUNTER, MAX_COUNTER
+    product_type = 'iphone_16_128'
+    if product_type not in all_products:
+        print("ℹ️ iPhone 16 128Gb не отслеживается — проверка токена пропущена")
+        return
+
+    product_count = len(all_products[product_type])
+    if product_count >= IPHONE_16_MIN_THRESHOLD:
+        COUNTER = 0
+        print(f"✅ Токен WB в порядке: найдено {product_count} iPhone 16 (128Gb)")
+        return
+
+    # === ПРОВЕРКА: прошло ли 30 минут с последнего уведомления? ===
+    last_alert_str = db.get_system_config("last_token_alert_time")
+    now = datetime.now()
+    COUNTER += 1
+
+    if last_alert_str:
+        try:
+            last_alert = datetime.fromisoformat(last_alert_str)
+            if now - last_alert < timedelta(minutes=30):
+                print("⏳ Уведомление уже отправлялось менее 30 минут назад — пропускаем")
+                return
+        except Exception as e:
+            print(f"⚠️ Ошибка при разборе last_token_alert_time: {e}")
+
+    if COUNTER == MAX_COUNTER:
+      COUNTER = 0
+      try:
+          await application.bot.send_message(
+              chat_id=ADMIN_USER_ID,
+            text=(
+                  "⚠️ Внимание, администратор!\n"
+                  f"При поиске «iPhone 16 128Gb» найдено {product_count} товаров.\n"
+                  f"Порог: {IPHONE_16_MIN_THRESHOLD}.\n\n"
+                  "🔹 Вероятно, токен Wildberries устарел.\n"
+                  "🔹 Обновите его в Настройках → «🔑 Изменить токен WB».\n\n"
+                  "ℹ️ Уведомления приходят не чаще раза в 30 минут."
+              )
+          )
+          print("✅ Уведомление админу отправлено")
+          # === Сохраняем время отправки ===
+          db.set_system_config("last_token_alert_time", now.isoformat())
+      except Exception as e:
+          print(f"❌ Не удалось отправить уведомление: {e}")
+          
 async def price_checker_job(context):
     """Фоновая задача для проверки цен"""
     global is_price_check_running
@@ -1019,6 +1080,7 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'ps5_slim_disk': 'PlayStation 5 Slim',
         'ps5_pro': 'PlayStation 5 Pro',
     }
+
     for product_type, product_data in user_products.items():
         price = product_data['price']
         if price > 0:
@@ -1027,7 +1089,12 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     all_custom_links = db.get_all_user_custom_links(user_id)
     for product_id, data in all_custom_links.items():
-        price_info.append(f"• Товар WB (артикул {product_id}): {data['price']:,} руб.".replace(',', ' '))
+        link = f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx"
+        price_info.append(
+            f"• Товар WB (артикул [{product_id}]({link})): "
+            f"{data['price']:,} руб.".replace(',', ' ')
+        )
+
 
     if not price_info:
         price_info = ["Не установлены"]
@@ -1060,9 +1127,9 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     if update.callback_query:
-        await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+        await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown', disable_web_page_preview=True)
     else:
-        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown', disable_web_page_preview=True)
 
 async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на Reply кнопки"""
@@ -1494,15 +1561,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 🔸 Получаем базовую цену без скидки
             connector = aiohttp.TCPConnector(limit=5)
             async with aiohttp.ClientSession(connector=connector) as session:
-                detailed_product_info = await get_detailed_product_price(session, product_id, discount_percent=0)
-                if detailed_product_info["price"] is None:
+                detailed_product_info = await get_detailed_product_base(session, product_id)
+                if detailed_product_info["base_price"] is None:
                     await update.message.reply_text(
                         "❌ Не удалось получить цену. Попробуйте позже.",
                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data="products_links")]])
                     )
                     return
                 # Применяем скидку пользователя
-                current_price = math.floor(detailed_product_info["price"] * (100 - discount_percent) / 100)
+                current_price = math.floor(detailed_product_info["base_price"] * (100 - discount_percent) / 100)
 
             # Сохраняем как initial_price (уже со скидкой!)
             db.add_custom_link(user_id, product_id, current_price)
