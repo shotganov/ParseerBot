@@ -67,6 +67,7 @@ class Database:
               search_queries TEXT NOT NULL,    -- JSON список запросов
               include_keywords TEXT NOT NULL,  -- ✅ НОВОЕ: JSON список обязательных слов
               exclude_keywords TEXT NOT NULL,  -- JSON список исключений
+              filters TEXT,
               is_active BOOLEAN DEFAULT 1,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           )
@@ -119,6 +120,7 @@ class Database:
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                   "512", "пonepжaнный"
               ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
           }
 
           iphone_17_pro_256_config = {
@@ -132,11 +134,12 @@ class Database:
               ], ensure_ascii=False),
               'exclude_keywords': json.dumps([
                   "15", "14", "13", "11", "10", "xs", "xr", "16",
-                  "plus", "max", "12", "esim+esim", "esim only", "only esim",
+                  "plus", "max", "12", #"esim+esim", "esim only", "only esim",
                   "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив",
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                   "512", "пonepжaнный"
               ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
           }
 
           iphone_17_pro_max_256_config = {
@@ -150,11 +153,12 @@ class Database:
               ], ensure_ascii=False),
               'exclude_keywords': json.dumps([
                   "15", "14", "13", "11", "10", "xs", "xr", "16",
-                  "plus", "12", "esim+esim", "esim only", "only esim",
+                  "plus", "12", #esim+esim", "esim only", "only esim",
                   "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив",
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                   "512", "пonepжaнный"
               ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
           }
 
           # iPhone 16 128GB
@@ -169,11 +173,12 @@ class Database:
               ], ensure_ascii=False),
               'exclude_keywords': json.dumps([
                   "15", "14", "13", "11", "10", "xs", "xr", "7",
-                  "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro", "iphone 12", "esim only",
-                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив", "esim only",
+                  "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro", "iphone 12",
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив",
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                   "256", "512", "пonepжaнный"
               ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
           }
           
           # iPhone 16 256GB
@@ -188,11 +193,12 @@ class Database:
               ], ensure_ascii=False),
               'exclude_keywords': json.dumps([
                 "15", "14", "13", "11", "10", "xs", "xr", "7",
-                "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro", "esim only",
-                "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив", "esim only",
+                "16e", "16 e", "16е", "16 е", "plus", "16 cn", "16 CN", "pro", 
+                "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив",
                 "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                 "128", "512", "пonepжaнный"
               ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
           }
           
           # iPhone 16 Pro 128GB
@@ -208,11 +214,12 @@ class Database:
               'exclude_keywords': json.dumps([
                   "15", "14", "13", "11", "xr", "xs", "7",
                   "16e", "16 e", "16е", "16 е", "plus", "pro max", "16 128", "16 256", "16 512",
-                  "Air", "iphone 16 s", "esim only",
-                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив", "esim only",
+                  "Air", "iphone 16 s", 
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив", 
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка!", "обменка", "обменный",
                   "256", "512", "1tb", "пonepжaнный"
               ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
           }
           
           # iPhone 16 Pro 256GB
@@ -228,11 +235,12 @@ class Database:
               'exclude_keywords': json.dumps([
                   "15", "14", "13", "11", "xr", "xs", "7",
                   "16e", "16 e", "16е", "16 е", "plus", "pro max", "16 128", "16 256", "16 512",
-                  "Air", "iphone 16 s", "esim only",
-                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив", "esim only",
+                  "Air", "iphone 16 s",
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", "актив",
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                   "128", "512", "1tb", "пonepжaнный"
               ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
           }
 
           # iPhone 16 Pro Max 256GB
@@ -248,11 +256,29 @@ class Database:
               'exclude_keywords': json.dumps([
                   "15", "14", "13", "11", "7",
                   "16e", "16 e", "16е", "16 е", "plus", "16 128", "16 256", "16 512",
-                  "Air", "16 pro 128", "16 pro 256", "16 pro 512", "16 pro 1tb", "iphone 16 s", "esim only", "актив",
+                  "Air", "16 pro 128", "16 pro 256", "16 pro 512", "16 pro 1tb", "iphone 16 s", "актив",
                   "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", 
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
                   "128", "512", "1tb", "ПonepЖaнHый"
               ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
+          }
+
+          samsung_s25_ultra_256_config = {
+              'product_name': 'Samsung S25 Ultra 256Gb',
+              'product_type': 'samsung_s25_ultra_256',
+              'search_queries': json.dumps([
+                  "Samsung S25 Ultra 256"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "s25", "ultra", "256"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "актив", "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "витринный", 
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный",
+                  "128", "512", "1tb", "ПonepЖaнHый"
+              ], ensure_ascii=False),
+              'filters' : 'f4433=830086596',
           }
 
 
@@ -271,6 +297,7 @@ class Database:
                   "без дисковода", "без привода", "бездисковый", "бездисковая",
                   "без диска", "цифровая", "цифровой", "цифровое", "цифровой версии", "4", "4 slim", "ssd-диск", "витринная",
               ], ensure_ascii=False),
+              'filters' : '',
           }
 
           # PS5 Pro
@@ -287,6 +314,71 @@ class Database:
                   "4 slim", "4 pro", "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
                   "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный", "ssd-диск", "витринная"
               ], ensure_ascii=False),
+              'filters' : '',
+          }
+
+          rtx_5060_config = {
+              'product_name': 'Rtx 5060',
+              'product_type': 'rtx_5060',
+              'search_queries': json.dumps([
+                  "rtx 5060"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "5060"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный","витринная"
+              ], ensure_ascii=False),
+              'filters' : '',
+          }
+
+          rtx_5060_ti_8_config = {
+              'product_name': 'Rtx 5060 Ti 8Gb',
+              'product_type': 'rtx_5060_ti_8',
+              'search_queries': json.dumps([
+                  "rtx 5060 ti 8gb"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "5060", "8"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный","витринная"
+              ], ensure_ascii=False),
+              'filters' : '',
+          }
+
+          rtx_5060_ti_16_config = {
+              'product_name': 'Rtx 5060 Ti 16Gb',
+              'product_type': 'rtx_5060_ti_16',
+              'search_queries': json.dumps([
+                  "rtx 5060 ti 16gb"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "5060", "16"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный","витринная"
+              ], ensure_ascii=False),
+              'filters' : '',
+          }
+
+          rtx_5070_config = {
+              'product_name': 'Rtx 5070',
+              'product_type': 'rtx_5070',
+              'search_queries': json.dumps([
+                  "rtx 5070"
+              ], ensure_ascii=False),
+              'include_keywords': json.dumps([  # ✅ Обязательные слова
+                  "5070"
+              ], ensure_ascii=False),
+              'exclude_keywords': json.dumps([
+                  "восстановленный", "ремоторизованный", "подержанный", "refurbished", "б/у", "used", "подержанная", "восстановленная", "отремонтированная", "обменная",
+                  "восстановлен", "отремонтированный", "восстанавливать", "перепаковка", "asis", "ASIS", "обменка", "обменный","витринная"
+              ], ensure_ascii=False),
+              'filters' : '',
           }
 
           # Вставляем конфиги
@@ -295,20 +387,22 @@ class Database:
               iphone_16_128_config, iphone_16_256_config, 
               iphone_16_pro_128_config, iphone_16_pro_256_config, 
               iphone_16_pro_max_256_config, 
-              ps5_slim_disk_config, ps5_pro_config
+              ps5_slim_disk_config, ps5_pro_config,
+              rtx_5060_config, rtx_5060_ti_8_config, rtx_5060_ti_16_config, rtx_5070_config
           ]
           
           for config in configs:
               cursor.execute('''
                   INSERT OR REPLACE INTO search_configs 
-                  (product_name, product_type, search_queries, include_keywords, exclude_keywords)
-                  VALUES (?, ?, ?, ?, ?)
+                  (product_name, product_type, search_queries, include_keywords, exclude_keywords, filters)
+                  VALUES (?, ?, ?, ?, ?, ?)
               ''', (
                   config['product_name'],
                   config['product_type'],
                   config['search_queries'],
                   config['include_keywords'],
-                  config['exclude_keywords']
+                  config['exclude_keywords'],
+                  config['filters']
               ))
           
           self.conn.commit()
@@ -407,9 +501,6 @@ class Database:
       """Устанавливает максимальную цену для конкретного товара пользователя"""
       cursor = self.conn.cursor()
       
-      # Проверяем, активен ли поиск у пользователя
-      is_search_active = self.get_user_search_active(user_id)
-      
       cursor.execute('''
           INSERT OR REPLACE INTO user_product_prices 
           (user_id, product_type, max_price) 
@@ -444,6 +535,16 @@ class Database:
           } 
           for row in cursor.fetchall()
       }
+
+    def get_user_product_price(self, user_id: int, product_type: str) -> int | None:
+      cursor = self.conn.cursor()
+      cursor.execute(
+          "SELECT max_price FROM user_product_prices WHERE user_id = ? AND product_type = ?",
+          (user_id, product_type)
+      )
+      row = cursor.fetchone()
+      return int(row[0]) if row else None
+
     
     def get_all_user_custom_links(self, user_id: int):
       """Возвращает ВСЕ кастомные ссылки пользователя (для отображения в меню)"""
@@ -516,7 +617,20 @@ class Database:
         """Совместимость со старым кодом - использует новую таблицу"""
         self.set_user_product_price(user_id, product_type, price)
 
-    # Остальные методы остаются без изменений
+    def delete_user_product_price(self, user_id, product_type): 
+      """Удаляет запись о цене товара для конкретного пользователя и типа товара""" 
+      cursor = self.conn.cursor() 
+      
+      # Удаляем запись 
+      cursor.execute(''' 
+          DELETE FROM user_product_prices WHERE user_id = ? AND product_type = ? ''', 
+          (user_id, product_type)) 
+      
+      self.conn.commit() 
+      
+      # Возвращаем True если была удалена хотя бы одна запись 
+      
+      return cursor.rowcount > 0
 
     def get_search_config(self, product_type):
       """Получает конфиг для конкретного типа продукта с обязательными словами"""
@@ -540,7 +654,7 @@ class Database:
         """Получает все активные конфиги для поиска с обязательными словами"""
         cursor = self.conn.cursor()
         cursor.execute(
-            'SELECT product_type, product_name, search_queries, include_keywords, exclude_keywords FROM search_configs WHERE is_active = 1'
+            'SELECT product_type, product_name, search_queries, include_keywords, exclude_keywords, filters FROM search_configs WHERE is_active = 1'
         )
         
         configs = {}
@@ -548,8 +662,9 @@ class Database:
             configs[row[0]] = {
                 'product_name': row[1],
                 'search_queries': json.loads(row[2]),
-                'include_keywords': json.loads(row[3]),  # ✅ Добавляем обязательные слова
+                'include_keywords': json.loads(row[3]),  
                 'exclude_keywords': json.loads(row[4]),
+                'filters' : row[5],
             }
         return configs
 
@@ -665,6 +780,7 @@ class Database:
             print(f"🆕 Новый товар {product_id} добавлен, цена: {current_price_int}")
             return True, None, False
         
+        
     def get_user_notified_product_ids(self, user_id: int):
         """Какие товары уже есть в product_notifications (то есть мы их уже слали пользователю)"""
         cur = self.conn.cursor()
@@ -701,8 +817,8 @@ class Database:
             WHERE user_id = ? AND product_id = ?
         ''', (new, user_id, product_id))
         self.conn.commit()
-        return True, (old == 0 and new == 1)
 
+        return True, (old == 0 and new == 1)
     
     def get_previous_price(self, user_id, product_id):
         """Получаем предыдущую цену товара (теперь это просто current_price из БД)"""
