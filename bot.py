@@ -125,7 +125,7 @@ async def get_products_by_config(session, config):
 
 
 
-def should_include_product(name_lower: str, config: dict) -> bool:
+def should_include_product(name_lower: str, product_type: str, config: dict) -> bool:
     """
     Универсальная проверка товара по конфигу.
     include — все слова должны присутствовать
@@ -138,8 +138,24 @@ def should_include_product(name_lower: str, config: dict) -> bool:
         return False
     if any(k in name_lower for k in exclude_keywords):
         return False
+    
+    if "iphone" in product_type:
+        return check_for_nano_sim_plus_Esim(name_lower)
+
     return True
 
+def check_for_nano_sim_plus_Esim(name_lower: str) -> bool:
+    """
+    Проверка на наличие нано-сим + Есим в названии товара.
+    Или если они отсутствуют в названии тоже добавляем товар.
+    """
+
+    name_replaced = name_lower.replace("esim", "")
+
+    if len(name_replaced) == len(name_lower) or "sim" in name_replaced:
+      return True
+    
+    return False
 
 # =========================
 # 1) DETALKA + CACHE (base_price only)
@@ -369,7 +385,7 @@ async def filter_products_for_user(
 
         name = str(p.get("name", ""))
         name_lower = name.lower()
-        if not should_include_product(name_lower, config):
+        if not should_include_product(name_lower, product_type, config):
             continue
 
         # грубая цена из выдачи — быстрый предварительный фильтр
@@ -522,7 +538,7 @@ async def check_all_prices(application):
                             if not pid:
                                 continue
                             name_lower = str(p.get("name", "")).lower()
-                            if should_include_product(name_lower, cfg):
+                            if should_include_product(name_lower, product_type, cfg):
                                 user_seen_map[uid].setdefault(pid, set()).add(product_type)
 
                     # фильтрация по цене (использует кеш деталки)

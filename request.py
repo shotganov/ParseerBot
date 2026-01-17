@@ -821,6 +821,12 @@ import requests
 
 import requests
 import json
+import math
+
+def calc_discounted_price(base_price: int | None, discount_percent: int) -> int | None:
+    if base_price is None:
+        return None
+    return math.floor(base_price * (100 - int(discount_percent)) / 100)
 
 def simple_wb_search(query, include_words=None, exclude_words=None):
     """
@@ -832,12 +838,12 @@ def simple_wb_search(query, include_words=None, exclude_words=None):
         exclude_words = []
     
     # Формируем URL
-    url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&hide_dtype=11&inheritFilters=false&lang=ru&page=1&query={query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
+    url = "https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=promo_mask_transp_r&appType=1&curr=rub&dest=-1255987&hide_dtype=9%3B11&hide_vflags=4294967296&inheritFilters=false&lang=ru&query=iphone+17&resultset=catalog&sort=popular&sort=priceup&&spp=30&suppressSpellcheck=false&uclusters=0"
     
     headers = {
         "authority": "u-card.wb.ru",
         "accept": "*/*",
-        "accept-encoding": "gzip, deflate, br, zstd", 
+        "accept-encoding": "gzip, deflate, br, zstd",
         "accept-language": "ru,en;q=0.9,en-GB;q=8,en-US;q=7",
         "origin": "https://www.wildberries.ru",
         "priority": "u=1, i",
@@ -849,13 +855,15 @@ def simple_wb_search(query, include_words=None, exclude_words=None):
         "sec-fetch-mode": "cors",
         "sec-fetch-site": "cross-site",
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0",
-        "authorization" : "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Njc4MTk0NTYsInVzZXIiOiI1NzMxNjk0NCIsInNoYXJkX2tleSI6IjE2IiwiY2xpZW50X2lkIjoid2IiLCJzZXNzaW9uX2lkIjoiODUzZTEwYTE4NGRmNDc5NmEyNjYyNzRiY2ZjMzMzN2UiLCJ2YWxpZGF0aW9uX2tleSI6IjM5ODA3OGQ0N2VlZTk4NzgxNjQ4MTg3ZWE3ZDY3ZDE0ZmM3OGZlYWFjYjljNWI2Y2U4YjU4NTlmMGM0YTVhNDAiLCJwaG9uZSI6InhMK29IODloM2Q0OFlpTnVIUVpaK3c9PSIsInVzZXJfcmVnaXN0cmF0aW9uX2R0IjoxNjg1Mzg3MzI0LCJ2ZXJzaW9uIjoyfQ.IB9OuANNje0T2PZNZnTlwsHo-bwNv522j-tqpnAlrBQer48M83yGKajtfWQ_Tp7fwigk-VCittgThBkbtnnqrQB9KVF7IcxaCN30jWcOKE-E84ib8hWIJ8n1L5rkIGb8ROhF22_5iCu5bAkPM9j9miOI3hXTjogvkpiqm3xL2rOYzqH4AZWHfkB9BA7E-Uwo34MzxzJF5z0xf5APi1yQDURpTH3oiB7E1hAcDXi2O9GYs913T59IlN4NqwC36AKgKNbEeX-yk-7B2wyO-9jgHY-CdHXqYxaL7W5_tecBI69pidq0fTtprL3LVc0AKS1MUt2hkGmdKLb2ln_nzmbCDg"
+        "authorization" : "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Njc2MzI5MjUsInVzZXIiOiI1NDU4NDA2MiIsInNoYXJkX2tleSI6IjYiLCJjbGllbnRfaWQiOiJ3YiIsInNlc3Npb25faWQiOiJmMmE3NWRjMThjODU0YTNkOGIxNDdlMTY4Mzc0NmJiZSIsInZhbGlkYXRpb25fa2V5IjoiMDJjYWY3OTU4Y2RiNTU5MjRiMTc3MzQ3MGZmOWIxNjliN2JjMzcxZmMxMmMzYTA5OTg4M2Y5OGU4NjMwZTVhNyIsInBob25lIjoiSmI5N1U0UTdYa1pBT1I4SWMrUFVkZz09IiwidXNlcl9yZWdpc3RyYXRpb25fZHQiOjE2OTUwNDgzMzksInZlcnNpb24iOjJ9.T6nkWSC7XyRuhvcMajMTxXk2SitYQg8OnO-4uepAWaTYEnw5U8KwQgQxP-yI9DrES7BI1Kt0T0pRmYNlH2Is5p2tNpUQ7de4QPRsUH9X674hbKXuofb2SZBYN5VaPy57gBvSUyyMJrNbbhGQejZg4-m9CI8Jn8PNcEUSNlMSymsTYrrVY1jRdymbTuMb5_qri7kWnhEmy02hDPrQN6XcBYKGwCuk5_bIwPWTC3Po1v3Cs0u65NMQzb1T6SO-Ji0TTzFs4x_nfr75q3lOZJEry-5iqMzlcB4NdA6wIBmyegfHFeeSJ4ZZikJkqqI93jJJ0jRooimk8-FMUnR5Pl0jcQ"
     }
     
     try:
         response = requests.get(url, headers=headers, timeout=10)
         data = response.json()
         products = data.get("products", [])
+
+        
         
         print(f"🔍 Поиск: '{query}'")
         print(f"📦 Найдено товаров: {len(products)}")
@@ -865,9 +873,9 @@ def simple_wb_search(query, include_words=None, exclude_words=None):
         for product in products:
             name = product.get("name", "")
 
-            price = (int(product['sizes'][0]['price']['product']) / 100) * ((100 - 10) / 100)
+            price = calc_discounted_price(math.floor(product["sizes"][0]["price"]["product"]) / 100, 6)
             product_id = product.get("id")
-            
+            print(math.floor(product["sizes"][0]["price"]["product"]) / 100)
             # Фильтрация
             name_lower = name.lower()
             
@@ -887,15 +895,12 @@ def simple_wb_search(query, include_words=None, exclude_words=None):
                 "id": product_id
             })
         
-        # Сортируем по цене
-        results.sort(key=lambda x: x["price"])
-        
         # Выводим результаты
         print(f"✅ После фильтрации: {len(results)} товаров\n")
         
         for i, item in enumerate(results[:15], 1):  # Показываем первые 15
             print(f"{i:2d}. {item['name']}...")  # Обрезаем длинные названия
-            print(f"    💰 Цена: {item['price']:,.0f} руб. | ID: {item['id']}")
+            print(f"    💰 Цена: {item['price']} руб. | ID: {item['id']}")
             print()
         
         return results
@@ -907,7 +912,12 @@ def simple_wb_search(query, include_words=None, exclude_words=None):
 # Примеры использования
 if __name__ == "__main__":
     # Пример 1
-    print("="*60)
-    simple_wb_search("rtx 5060", 
-                     include_words=["5060"],
-                     exclude_words=["чехол", "наушники", "зарядка"])
+    # print("="*60)
+    simple_wb_search("iphone 17")
+
+  
+
+    url = "https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&lang=ru&nm=739804962&ignore_stocks=true"
+    response = requests.get(url=url)
+    print(response.json())
+    
