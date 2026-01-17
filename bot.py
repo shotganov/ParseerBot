@@ -438,7 +438,7 @@ async def filter_products_for_user(
         elif "ps5" in product_type:
             title = f"🎮 Найдены {product_name} по выгодным ценам:"
         else:
-            title = f"🛍️ Найдены {product_name} по выгодным ценам:"
+            title = f"🖥 Найдены {product_name} по выгодным ценам:"
 
         await send_product_messages(application, user_id, found, title, max_products_per_message=15)
 
