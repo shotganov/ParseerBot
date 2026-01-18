@@ -16,8 +16,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
-#BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
+#BOT_TOKEN = "8459198512:AAGT_naxAdmepRFAkQMDuG-fmRgbFrTVtSg"
+BOT_TOKEN = "7998443497:AAGnYx7to86c-7H7HWcrXQFr4UDuj9ocQ3U"
 ADMIN_USER_ID = 300446433
 IPHONE_16_MIN_THRESHOLD = 10
 COUNTER = 0
@@ -150,7 +150,7 @@ def check_for_nano_sim_plus_Esim(name_lower: str) -> bool:
     Или если они отсутствуют в названии тоже добавляем товар.
     """
 
-    name_replaced = name_lower.replace("esim", "")
+    name_replaced = name_lower.replace("esim", "").replace("e-sim", "")
 
     if len(name_replaced) == len(name_lower) or "sim" in name_replaced:
       return True
