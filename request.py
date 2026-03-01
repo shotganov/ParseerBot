@@ -838,7 +838,7 @@ def simple_wb_search(query, include_words=None, exclude_words=None):
         exclude_words = []
     
     # Формируем URL
-    url = "https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=promo_mask_transp_r&appType=1&curr=rub&dest=-1255987&hide_dtype=9%3B11&hide_vflags=4294967296&inheritFilters=false&lang=ru&query=iphone+17&resultset=catalog&sort=popular&sort=priceup&&spp=30&suppressSpellcheck=false&uclusters=0"
+    url = f"https://search.wb.ru/exactmatch/ru/common/v18/search?ab_testid=no_action&ab_testing=false&appType=1&curr=rub&dest=123589415&f4433=830086596;8047145&hide_dtype=11&inheritFilters=false&lang=ru&page=1&query={query}&resultset=catalog&sort=priceup&spp=30&suppressSpellcheck=false&uclusters=0"
     
     headers = {
         "authority": "u-card.wb.ru",
@@ -917,7 +917,7 @@ if __name__ == "__main__":
 
   
 
-    url = "https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&lang=ru&nm=739804962&ignore_stocks=true"
-    response = requests.get(url=url)
-    print(response.json())
+    # url = "https://u-card.wb.ru/cards/v4/list?appType=1&curr=rub&dest=-1586348&spp=30&hide_dtype=11&ab_testing=false&lang=ru&nm=739804962&ignore_stocks=true"
+    # response = requests.get(url=url)
+    # print(response.json())
     

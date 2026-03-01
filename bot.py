@@ -150,7 +150,7 @@ def check_for_nano_sim_plus_Esim(name_lower: str) -> bool:
     Или если они отсутствуют в названии тоже добавляем товар.
     """
 
-    name_replaced = name_lower.replace("esim", "")
+    name_replaced = name_lower.replace("esim", "").replace("e-sim", "")
 
     if len(name_replaced) == len(name_lower) or "sim" in name_replaced:
       return True
