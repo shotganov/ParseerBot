@@ -8,6 +8,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQuer
 import logging
 import re
 import random
+import brotli
 from database import Database
 
 # Настройка логирования
@@ -161,19 +162,14 @@ def check_for_nano_sim_plus_Esim(name_lower: str) -> bool:
 # 1) DETALKA + CACHE (base_price only)
 # =========================
 
+import json
+import math
+import asyncio
+import aiohttp
+
 async def get_detailed_product_base(session, product_id: int) -> dict:
     """
     Детальная карточка WB. Всегда возвращает base_price (без скидки).
-
-    dict:
-    {
-        "product_id": int,
-        "base_price": int|None,         # цена без скидки
-        "in_stock": bool|None,
-        "total_qty": int|None,
-        "name": str|None,
-        "supplierRating": float|None
-    }
     """
     result = {
         "product_id": product_id,
@@ -191,16 +187,57 @@ async def get_detailed_product_base(session, product_id: int) -> dict:
     )
 
     try:
-        async with session.get(url, headers=get_headers_without_auth(), timeout=7) as resp:
-            text = await resp.text()
+        # Создаем свои заголовки, копируя базовые
+        headers = dict(get_headers_without_auth())
+        
+        # Важно: Указываем точный порядок и формат заголовка Accept-Encoding
+        headers['Accept-Encoding'] = 'gzip, deflate'
+        # Не добавляем 'br' вручную, так как это может вызвать проблемы
+        
+        # Добавляем User-Agent как у браузера
+        headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        
+        # Выполняем запрос
+        async with session.get(url, headers=headers, timeout=7) as resp:
+            # Читаем тело ответа как байты
+            body = await resp.read()
+            
+            # Проверяем Content-Encoding
+            content_encoding = resp.headers.get('Content-Encoding', '').lower()
+            
+            # Декодируем в зависимости от сжатия
+            if content_encoding == 'br':
+                # Декодируем Brotli вручную
+                try:
+                    decoded_body = brotli.decompress(body)
+                    text = decoded_body.decode('utf-8')
+                except Exception as e:
+                    print(f"❌ Ошибка декодирования Brotli для {product_id}: {e}")
+                    return result
+            elif content_encoding == 'gzip':
+                # Декодируем GZIP
+                import gzip
+                try:
+                    decoded_body = gzip.decompress(body)
+                    text = decoded_body.decode('utf-8')
+                except Exception:
+                    # Если не получается, пробуем как есть
+                    text = body.decode('utf-8', errors='ignore')
+            else:
+                # Нет сжатия или неизвестный тип
+                text = body.decode('utf-8', errors='ignore')
+            
+            # Парсим JSON
             try:
                 r = json.loads(text)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                print(f"❌ Ошибка парсинга JSON для {product_id}: {e}")
+                print(f"Первые 200 символов ответа: {text[:200]}")
                 return result
         
+        # Обрабатываем данные (остальная часть функции без изменений)
         products = r.get("products") or []
         if not products:
-            # карточка недоступна / товара нет
             result["in_stock"] = False
             result["total_qty"] = 0
             return result
@@ -227,7 +264,6 @@ async def get_detailed_product_base(session, product_id: int) -> dict:
             base_price = math.floor(p["sizes"][0]["price"]["product"]) / 100
             result["base_price"] = int(base_price)
         except Exception:
-            # цена может отсутствовать, но наличие мы уже знаем
             pass
 
         return result
@@ -235,8 +271,11 @@ async def get_detailed_product_base(session, product_id: int) -> dict:
     except asyncio.TimeoutError:
         print(f"⏰ Timeout детальной карточки {product_id}")
         return result
+    except aiohttp.ClientResponseError as e:
+        print(f"❌ Ошибка детальной карточки {product_id}: HTTP {e.status} - {e.message}")
+        return result
     except Exception as e:
-        print(f"❌ Ошибка детальной карточки {product_id}: {e}")
+        print(f"❌ Ошибка детальной карточки {product_id}: {type(e).__name__} - {e}")
         return result
 
 
