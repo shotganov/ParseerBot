@@ -10,7 +10,7 @@ class Database:
         self.initialize_iphone_configs()
 
         if not self.get_system_config("wb_authorization"):
-            self.set_system_config("wb_authorization", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NzIzOTk5MTUsInVzZXIiOiI1NDU4NDA2MiIsInNoYXJkX2tleSI6IjYiLCJjbGllbnRfaWQiOiJ3YiIsInNlc3Npb25faWQiOiJmMmE3NWRjMThjODU0YTNkOGIxNDdlMTY4Mzc0NmJiZSIsInBob25lIjoiSmI5N1U0UTdYa1pBT1I4SWMrUFVkZz09IiwidmFsaWRhdGlvbl9rZXkiOiIwMmNhZjc5NThjZGI1NTkyNGIxNzczNDcwZmY5YjE2OWI3YmMzNzFmYzEyYzNhMDk5ODgzZjk4ZTg2MzBlNWE3IiwidXNlcl9yZWdpc3RyYXRpb25fZHQiOjE2OTUwNDgzMzksInZlcnNpb24iOjJ9.nNWubOeEaquz_g6Ri73cvq7Dq6yNPiRjSNpWREsNF-F5dsetcl5Ni3tHhjacnA2zehdNr7P-JlgRhDzYgNvJYHolZpNsytrD5mTQzVEpGg4xYk8BlzTNb_lQTEiJOZ9oH2S1JDal3MozeUcP4Y5i8eQHOG7wM0k2i0NtjHJ_kj6wH8FEpcX9cxwVEqZgNdh_IumA0lHVCYMuaP9JFFLqZkN0o3EZtrKeXeQzlG_PArgnbM-y3QA0Tv3ap0WRFfiKgdLLRvG9Crvw0kKZ3jzyp1KgIHdFSIggI35EOdHQzRAuaa7FavTTsOp4xwT9F6B_q-nqCEDGcZbyN3wac14pNg")
+            self.set_system_config("wb_authorization", "")
     
     def create_tables(self):
         cursor = self.conn.cursor()
